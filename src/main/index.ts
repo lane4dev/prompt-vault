@@ -6,20 +6,22 @@ import { loadReactDevtools } from 'lib/electron-app/utils'
 import { ENVIRONMENT } from 'shared/constants'
 import { MainWindow } from './windows/main'
 import { waitFor } from 'shared/utils'
+import { registerPromptIpcHandlers } from './ipc/promptHandlers'
 
 makeAppWithSingleInstanceLock(async () => {
   await app.whenReady()
+  registerPromptIpcHandlers() // Register IPC handlers here
   const window = await makeAppSetup(MainWindow)
 
   if (ENVIRONMENT.IS_DEV) {
-    await loadReactDevtools()
+    // await loadReactDevtools()
     /* This trick is necessary to get the new
       React Developer Tools working at app initial load.
       Otherwise, it only works on manual reload.
     */
-    window.webContents.once('devtools-opened', async () => {
-      await waitFor(1000)
-      window.webContents.reload()
-    })
+    // window.webContents.once('devtools-opened', async () => {
+    //   await waitFor(1000)
+    //   window.webContents.reload()
+    // })
   }
 })

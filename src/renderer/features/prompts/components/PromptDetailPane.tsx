@@ -54,195 +54,415 @@ import {
   CommandItem,
 } from "renderer/components/ui/command";
 import { Checkbox } from "renderer/components/ui/checkbox";
+import { v4 as uuidv4 } from "uuid";
 
 import { PromptHistorySidebar } from "./PromptHistorySidebar";
+import { IpcPromptDetail, IpcPromptVersion, IpcOutputSample, IpcModel } from "shared/ipc-types";
 
 const AVAILABLE_TAGS = [
   "Writing", "Productivity", "Coding", "Development", "Business", "Marketing",
   "Data Analysis", "Design", "Research", "Education", "Personal",
 ];
 
-interface OutputSample {
-  id: string;
-  name: string;
-  content: string;
-}
-
-interface PromptVersion {
-  id: string;
-  name: string;
-  promptContent: string;
-}
-
-interface Prompt {
-  id: string;
-  name: string;
-  description: string;
-  tags: string[];
-  model: string;
-  lastModified: string;
-}
-
 interface PromptDetailPaneProps {
-  prompts: Prompt[];
   selectedPromptId: string | null;
-  onUpdatePromptTags: (promptId: string, newTags: string[]) => void;
+  onUpdatePromptName: (id: string, newName: string) => Promise<void>;
+  onUpdatePromptDescription: (id: string, newDescription: string) => Promise<void>;
+  onUpdatePromptCurrentContent: (id: string, newContent: string) => Promise<void>;
+  onUpdatePromptCurrentModelId: (id: string, newModelId: string) => Promise<void>;
+  onUpdatePromptCurrentTemperature: (id: string, newTemperature: number) => Promise<void>;
+  onUpdatePromptCurrentTokenLimit: (id: string, newTokenLimit: number) => Promise<void>;
+  onUpdatePromptCurrentTopK: (id: string, newTopK: number) => Promise<void>;
+  onUpdatePromptCurrentTopP: (id: string, newTopP: number) => Promise<void>;
+  onUpdatePromptTags: (id: string, newTags: string[]) => Promise<void>;
+  onCreatePromptVersion: (
+    promptId: string,
+    label: string,
+    content: string,
+    modelId: string,
+    temperature: number,
+    tokenLimit: number | undefined,
+    topK: number | undefined,
+    topP: number | undefined,
+    note: string | undefined,
+    isMajorVersion: boolean,
+    copySamplesFromVersionId?: string,
+    archivePreviousVersionId?: string,
+  ) => Promise<IpcPromptVersion>;
+  onCreateOutputSample: (
+    versionId: string,
+    name: string,
+    content: string,
+  ) => Promise<IpcOutputSample>;
 }
 
-export function PromptDetailPane({ prompts, selectedPromptId, onUpdatePromptTags }: PromptDetailPaneProps) {
-  const currentPrompt = prompts.find(p => p.id === selectedPromptId);
+export function PromptDetailPane({
+  selectedPromptId,
+  onUpdatePromptName,
+  onUpdatePromptDescription,
+  onUpdatePromptCurrentContent,
+  onUpdatePromptCurrentModelId,
+  onUpdatePromptCurrentTemperature,
+  onUpdatePromptCurrentTokenLimit,
+  onUpdatePromptCurrentTopK,
+  onUpdatePromptCurrentTopP,
+  onUpdatePromptTags,
+  onCreatePromptVersion,
+  onCreateOutputSample,
+}: PromptDetailPaneProps) {
+  const [promptDetail, setPromptDetail] = useState<IpcPromptDetail | null>(null);
+  const [allModels, setAllModels] = useState<IpcModel[]>([]);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(true);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
 
+  // Local states for editable fields, synchronized with promptDetail
   const [isEditingName, setIsEditingName] = useState(false);
-  const [tempPromptName, setTempPromptName] = useState(currentPrompt?.name || "");
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [tempPromptName, setTempPromptName] = useState("");
+  const [currentDescription, setCurrentDescription] = useState("");
+  const [currentContent, setCurrentContent] = useState("");
+  const [currentModelId, setCurrentModelId] = useState("");
+  const [currentTemperature, setCurrentTemperature] = useState(0.7);
+  const [currentTokenLimit, setCurrentTokenLimit] = useState<number | undefined>(2000);
+  const [currentTopK, setCurrentTopK] = useState<number | undefined>(undefined);
+  const [currentTopP, setCurrentTopP] = useState<number | undefined>(undefined);
 
-  // State for Tags Popover
+  // Tags Popover State
   const [isTagsPopoverOpen, setIsTagsPopoverOpen] = useState(false);
-  const [currentPromptTags, setCurrentPromptTags] = useState<string[]>(currentPrompt?.tags || []);
+  const [currentPromptTags, setCurrentPromptTags] = useState<string[]>([]);
 
-  useEffect(() => {
-    setTempPromptName(currentPrompt?.name || "");
-    setCurrentPromptTags(currentPrompt?.tags || []);
-  }, [currentPrompt]);
-
-  // Prompt Version Management
-  const [versions, setVersions] = useState<PromptVersion[]>(
-    currentPrompt ? [{ id: "v1", name: "v1", promptContent: currentPrompt.description || "" }] : []
-  );
-
-  const [activeVersionId, setActiveVersionId] = useState<string | null>(currentPrompt ? "v1" : null);
+  // Prompt Version Management State
+  const [versions, setVersions] = useState<IpcPromptVersion[]>([]);
+  const [activeVersionId, setActiveVersionId] = useState<string | null>(null);
   const [isRenamingVersion, setIsRenamingVersion] = useState(false);
   const [tempVersionName, setTempVersionName] = useState("");
   const [isDeletingVersion, setIsDeletingVersion] = useState(false);
 
-  // Sample Management State
-  const [samples, setSamples] = useState<OutputSample[]>([
-    { id: "1", name: "Sample 1", content: "This is the first example output." }
-  ]);
-  const [activeSampleId, setActiveSampleId] = useState<string>("1");
+  // Output Samples Management State
+  const [samples, setSamples] = useState<IpcOutputSample[]>([]);
+  const [activeSampleId, setActiveSampleId] = useState<string | null>(null);
   const [outputMode, setOutputMode] = useState<'preview' | 'edit'>('preview');
 
-  useEffect(() => {
-    // Reset versions when prompt changes
-    if (currentPrompt) {
-      setVersions([{ id: "v1", name: "v1", promptContent: currentPrompt.description || "" }]);
-      setActiveVersionId("v1");
-    } else {
-      setVersions([]);
-      setActiveVersionId(null);
-    }
-  }, [currentPrompt]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [promptMode, setPromptMode] = useState<'api' | 'chat'>('api');
 
-  const handleSaveName = () => {
-    if (currentPrompt && tempPromptName.trim() !== currentPrompt.name) {
-      // This means we are editing the prompt name, not tags
-      // TODO: Implement actual prompt name update via a prop
-      // For now, just revert or update locally if no global update mechanism is passed
+  // --- Data Fetching & Synchronization --- //
+  useEffect(() => {
+    const fetchDetail = async () => {
+      if (!selectedPromptId) {
+        setPromptDetail(null);
+        setIsLoadingDetail(false);
+        return;
+      }
+      try {
+        setIsLoadingDetail(true);
+        setErrorDetail(null);
+        const detail = await window.promptApi.getPromptDetails(selectedPromptId);
+        setPromptDetail(detail);
+        // Synchronize local states with fetched detail
+        if (detail) {
+          setTempPromptName(detail.name);
+          setCurrentDescription(detail.description);
+          setCurrentContent(detail.currentContent);
+          setCurrentModelId(detail.currentModelId || "");
+          setCurrentTemperature(detail.currentTemperature);
+          setCurrentTokenLimit(detail.currentTokenLimit);
+          setCurrentTopK(detail.currentTopK);
+          setCurrentTopP(detail.currentTopP);
+          setCurrentPromptTags(detail.tags);
+          setVersions(detail.versions);
+          
+          // Set active version to the latest MAJOR version initially
+          const majorVersions = detail.versions.filter(v => v.isMajorVersion);
+          const latestMajor = majorVersions.length > 0 ? majorVersions[majorVersions.length - 1] : null;
+          // Fallback to any version if no major version exists (shouldn't happen with correct seed/logic)
+          const fallback = detail.versions.length > 0 ? detail.versions[detail.versions.length - 1] : null;
+          
+          setActiveVersionId(latestMajor ? latestMajor.id : (fallback ? fallback.id : null));
+          
+          const targetVersionId = latestMajor ? latestMajor.id : (fallback ? fallback.id : null);
+          if (targetVersionId) {
+             const versionSamples = detail.outputSamples.filter(s => s.versionId === targetVersionId);
+             setSamples(versionSamples);
+             setActiveSampleId(versionSamples.length > 0 ? versionSamples[0].id : null);
+          } else {
+             setSamples([]);
+             setActiveSampleId(null);
+          }
+
+        } else {
+          // Reset if prompt deleted
+          setTempPromptName("");
+          setCurrentDescription("");
+          setCurrentContent("");
+          setCurrentModelId("");
+          setCurrentTemperature(0.7);
+          setCurrentTokenLimit(2000);
+          setCurrentTopK(undefined);
+          setCurrentTopP(undefined);
+          setCurrentPromptTags([]);
+          setVersions([]);
+          setActiveVersionId(null);
+          setSamples([]);
+          setActiveSampleId(null);
+        }
+      } catch (err) {
+        console.error("Failed to fetch prompt details:", err);
+        setErrorDetail("Failed to load prompt details.");
+      } finally {
+        setIsLoadingDetail(false);
+      }
+    };
+
+    const fetchModels = async () => {
+      try {
+        const models = await window.promptApi.getAllModels();
+        setAllModels(models);
+      } catch (err) {
+        console.error("Failed to fetch models for detail pane:", err);
+      }
+    };
+
+    fetchDetail();
+    fetchModels();
+  }, [selectedPromptId]);
+
+  // Update samples when activeVersionId changes (handled by the effect above partially, but needed for manual switching)
+  useEffect(() => {
+    if (!promptDetail) return; // Ensure promptDetail is loaded
+
+    const selectedVersion = versions.find(v => v.id === activeVersionId);
+
+    if (selectedVersion) {
+      // 1. Update local states from selected version
+      setCurrentContent(selectedVersion.content);
+      setCurrentModelId(selectedVersion.modelId || "");
+      setCurrentTemperature(selectedVersion.temperature || 0.7);
+      setCurrentTokenLimit(selectedVersion.tokenLimit);
+      setCurrentTopK(selectedVersion.topK);
+      setCurrentTopP(selectedVersion.topP);
+
+      // 2. Update database 'current' fields via IPC
+      onUpdatePromptCurrentContent(promptDetail.id, selectedVersion.content);
+      onUpdatePromptCurrentModelId(promptDetail.id, selectedVersion.modelId || "");
+      onUpdatePromptCurrentTemperature(promptDetail.id, selectedVersion.temperature || 0.7);
+      onUpdatePromptCurrentTokenLimit(promptDetail.id, selectedVersion.tokenLimit || undefined as any);
+      onUpdatePromptCurrentTopK(promptDetail.id, selectedVersion.topK || undefined as any);
+      onUpdatePromptCurrentTopP(promptDetail.id, selectedVersion.topP || undefined as any);
+      
+      // 3. Update samples for the selected version
+      const versionSamples = promptDetail.outputSamples.filter(s => s.versionId === selectedVersion.id);
+      setSamples(versionSamples);
+      setActiveSampleId(versionSamples.length > 0 ? versionSamples[0].id : null);
+    } 
+  }, [activeVersionId, promptDetail, versions]); 
+
+
+  // --- Handlers --- //
+  const handleSaveName = async () => {
+    if (promptDetail && tempPromptName.trim() !== promptDetail.name) {
+      await onUpdatePromptName(promptDetail.id, tempPromptName.trim());
     }
     setIsEditingName(false);
   };
 
-  const handleTagToggle = (tag: string) => {
-    if (!currentPrompt) return;
+  const handleCancelEditName = () => {
+    if (promptDetail) setTempPromptName(promptDetail.name);
+    setIsEditingName(false);
+  };
+
+  const handleTagToggle = async (tag: string) => {
+    if (!promptDetail) return;
     const newTags = currentPromptTags.includes(tag)
       ? currentPromptTags.filter((t) => t !== tag)
       : [...currentPromptTags, tag];
     setCurrentPromptTags(newTags);
-    onUpdatePromptTags(currentPrompt.id, newTags);
-  };
-
-  const handleCancelEdit = () => {
-    setTempPromptName(currentPrompt?.name || "");
-    setIsEditingName(false);
+    await onUpdatePromptTags(promptDetail.id, newTags);
   };
 
   const activeVersion = versions.find(v => v.id === activeVersionId);
   const activeSample = samples.find(s => s.id === activeSampleId);
 
-  const handleAddVersion = () => {
-    const newId = `v${versions.length + 1}`;
+  const handleAddVersion = async () => {
+    if (!promptDetail) return;
+    const newVersion = await onCreatePromptVersion(
+      promptDetail.id,
+      `v${versions.filter(v => v.isMajorVersion).length + 1}`, // Count only major versions for naming
+      currentContent, 
+      currentModelId,
+      currentTemperature,
+      currentTokenLimit,
+      currentTopK,
+      currentTopP,
+      "Manual Version",
+      true, // isMajorVersion = true
+      undefined, // No sample copy
+      undefined // No archive
+    );
+    setVersions(prev => [...prev, newVersion]);
+    setActiveVersionId(newVersion.id);
+  };
 
-    const newVersion: PromptVersion = {
-      id: newId,
-      name: newId,
-      promptContent: activeVersion?.promptContent || "", // Copy content from active version
-    };
-
-    setVersions([...versions, newVersion]);
-    setActiveVersionId(newId);
+  const handleSaveVersion = async () => {
+    if (!promptDetail || !activeVersion) return;
+    const newMajorVersion = await onCreatePromptVersion(
+      promptDetail.id,
+      activeVersion.label, // Reuse label (simulate update)
+      currentContent,
+      currentModelId,
+      currentTemperature,
+      currentTokenLimit,
+      currentTopK,
+      currentTopP,
+      `Saved at ${new Date().toLocaleTimeString()}`,
+      true, // isMajorVersion = true (This is the new head)
+      activeVersionId || undefined, // Copy samples from current version
+      activeVersionId || undefined // Archive the current version
+    );
+    
+    setVersions(prev => {
+        // Mark old version as non-major in local state
+        const updated = prev.map(v => v.id === activeVersionId ? { ...v, isMajorVersion: false } : v);
+        // Add new version
+        return [...updated, newMajorVersion];
+    });
+    
+    setActiveVersionId(newMajorVersion.id); // Switch to the new head
   };
 
   const handleRenameVersion = () => {
+    // TODO: Implement IPC
     if (activeVersion && tempVersionName.trim()) {
       setVersions(versions.map(v =>
-        v.id === activeVersionId ? { ...v, name: tempVersionName.trim() } : v
+        v.id === activeVersionId ? { ...v, label: tempVersionName.trim() } : v
       ));
-
       setIsRenamingVersion(false);
       setTempVersionName("");
     }
   };
 
   const handleDeleteVersion = () => {
+    // TODO: Implement IPC
     const newVersions = versions.filter(v => v.id !== activeVersionId);
-
     setVersions(newVersions);
-
-    if (newVersions.length > 0) {
-      setActiveVersionId(newVersions[newVersions.length - 1].id); // Select the last one
+    
+    // Find next version to select (prefer major versions)
+    const nextMajor = newVersions.filter(v => v.isMajorVersion);
+    if (nextMajor.length > 0) {
+      setActiveVersionId(nextMajor[nextMajor.length - 1].id);
+    } else if (newVersions.length > 0) {
+      setActiveVersionId(newVersions[newVersions.length - 1].id);
     } else {
-      // No versions left, create a new default one
-      const newId = "v1";
-
-      setVersions([{ id: newId, name: newId, promptContent: currentPrompt?.description || "" }]);
-      setActiveVersionId(newId);
+      // Create default
+      if (promptDetail) {
+        const newVersionId = uuidv4();
+        // Just mock update local state for now until full IPC logic
+        // Ideally should call create API
+      }
     }
     setIsDeletingVersion(false);
   };
 
-  const handlePromptContentChange = (newContent: string) => {
-    setVersions(versions.map(v =>
-      v.id === activeVersionId ? { ...v, promptContent: newContent } : v
-    ));
+  const handlePromptContentChange = async (newContent: string) => {
+    if (!promptDetail) return;
+    setCurrentContent(newContent);
+    await onUpdatePromptCurrentContent(promptDetail.id, newContent);
   };
 
-  const handleAddSample = () => {
-    const newId = String(Date.now());
-    const newSample = { id: newId, name: `Sample ${samples.length + 1}`, content: "" };
-
-    setSamples([...samples, newSample]);
-    setActiveSampleId(newId);
+  const handleAddSample = async () => {
+    if (!promptDetail || !activeVersionId) return;
+    const newSample = await onCreateOutputSample(activeVersionId, `Sample ${samples.length + 1}`, "");
+    setSamples(prev => [...prev, newSample]);
+    setActiveSampleId(newSample.id);
   };
 
   const handleDeleteSample = (idToDelete: string) => {
+    // TODO: Implement IPC
     const newSamples = samples.filter(s => s.id !== idToDelete);
-
     setSamples(newSamples);
-
     if (activeSampleId === idToDelete && newSamples.length > 0) {
       setActiveSampleId(newSamples[newSamples.length - 1].id);
     }
   };
 
-  const handleSampleChange = (key: keyof OutputSample, value: string) => {
+  const handleSampleChange = (key: keyof IpcOutputSample, value: string) => {
+    // TODO: Implement IPC
     setSamples(samples.map(s =>
       s.id === activeSampleId ? { ...s, [key]: value } : s
     ));
   };
 
-  const [model, setModel] = useState(currentPrompt?.model || "gpt-4o");
-
-  useEffect(() => {
-    setModel(currentPrompt?.model || "gpt-4o");
-  }, [currentPrompt]);
-
-  const handleModelChange = (value: string) => {
-    setModel(value);
+  const handleModelChange = async (value: string) => {
+    if (!promptDetail) return;
+    setCurrentModelId(value);
+    await onUpdatePromptCurrentModelId(promptDetail.id, value);
   };
 
-  const [promptMode, setPromptMode] = useState<'api' | 'chat'>('api');
+  const handleTemperatureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!promptDetail) return;
+    const value = parseFloat(e.target.value);
+    if (!isNaN(value)) {
+      setCurrentTemperature(value);
+      await onUpdatePromptCurrentTemperature(promptDetail.id, value);
+    }
+  };
 
-  if (!currentPrompt) {
+  const handleTokenLimitChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!promptDetail) return;
+    const value = parseInt(e.target.value);
+    if (!isNaN(value)) {
+      setCurrentTokenLimit(value);
+      await onUpdatePromptCurrentTokenLimit(promptDetail.id, value);
+    }
+  };
+
+  const handleTopKChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!promptDetail) return;
+    const value = parseInt(e.target.value);
+    if (!isNaN(value)) {
+      setCurrentTopK(value);
+      await onUpdatePromptCurrentTopK(promptDetail.id, value);
+    } else if (e.target.value === '') {
+      setCurrentTopK(undefined);
+      await onUpdatePromptCurrentTopK(promptDetail.id, undefined as any);
+    }
+  };
+
+  const handleTopPChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!promptDetail) return;
+    const value = parseFloat(e.target.value);
+    if (!isNaN(value)) {
+      setCurrentTopP(value);
+      await onUpdatePromptCurrentTopP(promptDetail.id, value);
+    } else if (e.target.value === '') {
+      setCurrentTopP(undefined);
+      await onUpdatePromptCurrentTopP(promptDetail.id, undefined as any);
+    }
+  };
+
+  const handleDescriptionChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!promptDetail) return;
+    const newDescription = e.target.value;
+    setCurrentDescription(newDescription);
+    await onUpdatePromptDescription(promptDetail.id, newDescription);
+  };
+
+  if (isLoadingDetail) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center text-muted-foreground">
+        Loading prompt details...
+      </div>
+    );
+  }
+
+  if (errorDetail) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center text-destructive">
+        Error: {errorDetail}
+      </div>
+    );
+  }
+
+  if (!promptDetail) {
     return (
       <div className="flex flex-col h-full items-center justify-center text-muted-foreground">
         Select a prompt from the sidebar or create a new one.
@@ -264,26 +484,29 @@ export function PromptDetailPane({ prompts, selectedPromptId, onUpdatePromptTags
                   onChange={(e) => setTempPromptName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleSaveName();
-                    if (e.key === "Escape") handleCancelEdit();
+                    if (e.key === "Escape") handleCancelEditName();
                   }}
                   autoFocus
                 />
                 <Button variant="ghost" size="icon" onClick={handleSaveName}>
                   <Check className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={handleCancelEdit}>
+                <Button variant="ghost" size="icon" onClick={handleCancelEditName}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold tracking-tight">{currentPrompt.name}</h2>
+                <h2 className="text-lg font-bold tracking-tight">{promptDetail.name}</h2>
                 <Button variant="ghost" size="icon" onClick={() => setIsEditingName(true)}>
                   <Pencil className="h-4 w-4" />
                 </Button>
               </div>
             )}
-            <Select value={promptMode} onValueChange={(v: 'api' | 'chat') => setPromptMode(v)}>
+            <Select
+              value={promptMode}
+              onValueChange={(v) => setPromptMode(v as 'api' | 'chat')}
+            >
               <SelectTrigger className="w-[110px] h-8">
                 <SelectValue />
               </SelectTrigger>
@@ -294,31 +517,35 @@ export function PromptDetailPane({ prompts, selectedPromptId, onUpdatePromptTags
             </Select>
           </div>
 
-          {/* Centered Version Management Group */}
+          {/* Centered Version Management Group */} 
           <div className="flex flex-1 justify-center items-center px-4">
             <div className="flex items-center gap-1 rounded-md bg-muted/50 p-1">
               <Tabs value={activeVersionId || ""} onValueChange={setActiveVersionId} className="h-8">
                 <TabsList className="h-7">
-                  {versions.map((version) => (
+                  {versions.filter(v => v.isMajorVersion).map((version) => (
                     <TabsTrigger key={version.id} value={version.id}>
-                      {version.name}
+                      {version.label}
                     </TabsTrigger>
                   ))}
                 </TabsList>
               </Tabs>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleAddVersion} title="Add new version">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleAddVersion} title="Create new version">
                 <Plus className="h-4 w-4" />
               </Button>
               {/* Dropdown for Version Actions */}
               {activeVersion && (versions.length > 0) && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-7 w-7">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                    >
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => { setTempVersionName(activeVersion.name); setIsRenamingVersion(true); }}>
+                    <DropdownMenuItem onClick={() => { setTempVersionName(activeVersion.label || ""); setIsRenamingVersion(true); }}>
                       Rename
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
@@ -340,7 +567,7 @@ export function PromptDetailPane({ prompts, selectedPromptId, onUpdatePromptTags
               <Clock className="w-4 h-4 mr-2" />
               History
             </Button>
-            <Button size="sm">
+            <Button size="sm" onClick={handleSaveVersion}>
               <Save className="w-4 h-4 mr-2" />
               Save
             </Button>
@@ -351,7 +578,7 @@ export function PromptDetailPane({ prompts, selectedPromptId, onUpdatePromptTags
         <div className="flex items-center gap-2 mt-2">
           <ScrollArea className="w-full whitespace-nowrap">
             <div className="flex w-max space-x-2 p-1">
-              {currentPrompt.tags.map((tag) => (
+              {promptDetail.tags.map((tag) => (
                 <Badge key={tag} variant="secondary">
                   {tag}
                 </Badge>
@@ -403,42 +630,68 @@ export function PromptDetailPane({ prompts, selectedPromptId, onUpdatePromptTags
         <div className="grid grid-cols-2 gap-6">
           <div className="space-y-2">
             <Label>Goal</Label>
-            <Input placeholder="One sentence goal..." defaultValue={currentPrompt.description} />
+            <Input
+              placeholder="One sentence goal..."
+              value={currentDescription}
+              onChange={handleDescriptionChange}
+            />
           </div>
           <div className="space-y-2">
             <Label>Model</Label>
-            <Select value={model} onValueChange={handleModelChange}>
+            <Select value={currentModelId || allModels[0]?.id || ""} onValueChange={handleModelChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Select model" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-                <SelectItem value="claude-3.5-sonnet">Claude 3.5 Sonnet</SelectItem>
-                <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
+                {allModels.map((model) => (
+                  <SelectItem key={model.id} value={model.id}>
+                    {model.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
         </div>
+
         {promptMode === 'api' && (
           <div className="grid grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label>Temperature</Label>
-              <Input type="number" step="0.1" defaultValue="0.7" />
+              <div className="space-y-2">
+                <Label>Temperature</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={currentTemperature}
+                  onChange={handleTemperatureChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Token Limit</Label>
+                <Input
+                  type="number"
+                  value={currentTokenLimit}
+                  onChange={handleTokenLimitChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Top-K</Label>
+                <Input
+                  type="number"
+                  value={currentTopK || ""}
+                  onChange={handleTopKChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Top-P</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={currentTopP || ""}
+                  onChange={handleTopPChange}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>Token Limit</Label>
-              <Input type="number" defaultValue="2000" />
-            </div>
-            <div className="space-y-2">
-              <Label>Top-K</Label>
-              <Input type="number" />
-            </div>
-            <div className="space-y-2">
-              <Label>Top-P</Label>
-              <Input type="number" />
-            </div>
-          </div>
         )}
+
         <Separator />
         {/* Editor Area */}
         <div className="grid grid-cols-2 gap-6 h-[500px]">
@@ -453,7 +706,7 @@ export function PromptDetailPane({ prompts, selectedPromptId, onUpdatePromptTags
             <Textarea
               className="flex-1 font-mono text-sm resize-none"
               placeholder="Enter your system prompt here..."
-              value={activeVersion?.promptContent || ""}
+              value={currentContent}
               onChange={(e) => handlePromptContentChange(e.target.value)}
             />
           </div>
@@ -548,7 +801,11 @@ export function PromptDetailPane({ prompts, selectedPromptId, onUpdatePromptTags
           </div>
         </div>
       </div>
-      <PromptHistorySidebar open={isHistoryOpen} onOpenChange={setIsHistoryOpen} />
+      <PromptHistorySidebar 
+        open={isHistoryOpen} 
+        onOpenChange={setIsHistoryOpen} 
+        versions={versions} // Pass versions to history
+      />
 
       {/* Rename Version Dialog */}
       <Dialog open={isRenamingVersion} onOpenChange={setIsRenamingVersion}>
@@ -556,7 +813,7 @@ export function PromptDetailPane({ prompts, selectedPromptId, onUpdatePromptTags
           <DialogHeader>
             <DialogTitleShadcn>Rename Version</DialogTitleShadcn>
             <DialogDescription>
-              Enter a new name for version "{activeVersion?.name}".
+              Enter a new name for version "{activeVersion?.label}".
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -585,7 +842,7 @@ export function PromptDetailPane({ prompts, selectedPromptId, onUpdatePromptTags
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the "{activeVersion?.name}" version.
+              This action cannot be undone. This will permanently delete the "{activeVersion?.label}" version.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

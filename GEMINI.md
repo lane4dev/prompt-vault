@@ -183,7 +183,7 @@ src
 你是一个：
 - 熟悉 Electron + React + TypeScript + Tailwind + shadcn/ui 的全栈工程师，
 - 也熟悉 Prompt Engineering 和 VS Code / Obsidian / PromptHub 这类工具的交互设计，
-- 会通过 Gemini CLI 的「agentic coding」能力，在本地项目中创建/修改文件，辅助我完成开发。:contentReference[oaicite:1]{index=1}
+- 会通过 Gemini CLI 的「agentic coding」能力，在本地项目中创建/修改文件，辅助我完成开发。
 
 **要求你：**
 - 任何时候都要考虑这个项目的长期可维护性。
@@ -196,7 +196,7 @@ src
 
 # 工作方式（Workflow Rules）
 
-当我在这个仓库目录里用 Gemini CLI 向你提出需求时，请按照如下流程执行：:contentReference[oaicite:2]{index=2}  
+当我在这个仓库目录里用 Gemini CLI 向你提出需求时，请按照如下流程执行：
 
 1. **先制定计划（Plan First, No Edits Yet）**
    - 第一步永远是阅读代码结构，理解当前状态，然后输出一个「计划」。
@@ -232,7 +232,7 @@ src
 
 6. **关于 UI & 组件**
    - 所有面向用户的 UI 组件：
-     - 尽量用 shadcn/ui 提供的 Button、Input、Select、Tabs、Card、Dialog、Form、Resizable 等组件组合。:contentReference[oaicite:3]{index=3}  
+     - 尽量用 shadcn/ui 提供的 Button、Input、Select、Tabs、Card、Dialog、Form、Resizable 等组件组合。
      - 风格统一接近 shadcn 设计，而不是混用其他 UI 库。
    - Prompt 编辑器部分：
      - 可以先用简单的 `<textarea>` + Markdown 预览实现；
@@ -258,5 +258,35 @@ src
 > - “实现本地 JSON 存储，启动时从 JSON 加载 Prompt 列表，关闭前自动保存。”
 >
 > 你只需要根据我给的具体任务，在上面的规则下工作即可。
+
+---
+
+# 项目进度日志（Project Status Log）
+
+## 2024-05-xx (Initial Development)
+- **UI 框架搭建**:
+  - 创建了 `PromptManagerScreen` 作为主容器，采用左右分栏布局（Sidebar + DetailPane）。
+  - 集成了 `shadcn/ui` 的基础组件（Button, Input, Resizable, etc.）。
+- **Prompt 列表 (Sidebar)**:
+  - 实现了 Prompt 列表展示，支持选中切换。
+  - 实现了「新建 Prompt」功能，支持输入标题、Goal 和 **多选标签**（使用 Popover + Command）。
+  - 实现了「删除 Prompt」功能（含确认对话框）。
+  - 标签展示优化：列表中最多显示 3 个标签，超出显示 "+N"。
+- **Prompt 详情 (DetailPane)**:
+  - 实现了 Prompt 元数据编辑（Goal, Model, Params）。
+  - 实现了 **版本管理** UI：Tabs 切换版本，支持新建、重命名、删除版本。
+  - 实现了 **标签管理**：
+    - Header 区域展示完整标签列表。
+    - 支持点击 "Edit Tags" 按钮弹出 Popover 进行标签的增删（与 Sidebar 新建时的组件逻辑一致）。
+    - 状态实时同步到父组件 `PromptManagerScreen`。
+  - 实现了 **Prompt 编辑器** 和 **Output 示例** 管理（支持多样本切换）。
+- **数据流**:
+  - 状态提升（Lifted State）：`prompts` 和 `selectedPromptId` 状态管理在 `PromptManagerScreen`。
+  - 通过 Props (`onUpdatePromptTags` 等) 将子组件变更传递回顶层。
+
+**Next Steps**:
+- 接入本地持久化存储（Electron Main Process + JSON/SQLite）。
+- 实现完整的版本内容（Prompt Content / Output Samples）与主状态的同步。
+- 优化 Markdown 编辑体验。
 
 在你开始前，请先根据仓库结构和上述信息，输出你的 `## Plan`，然后等待我确认。

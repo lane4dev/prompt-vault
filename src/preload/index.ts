@@ -1,14 +1,35 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
+import { IpcChannels, PromptApi } from '../shared/ipc-types'
 
 declare global {
   interface Window {
-    App: typeof API
+    promptApi: PromptApi
   }
 }
 
-const API = {
-  sayHelloFromBridge: () => console.log('\nHello from bridgeAPI! 👋\n\n'),
-  username: process.env.USER,
+const promptApi: PromptApi = {
+  getAllPrompts: () => ipcRenderer.invoke(IpcChannels.GET_ALL_PROMPTS),
+  getPromptDetails: (id) => ipcRenderer.invoke(IpcChannels.GET_PROMPT_DETAILS, id),
+  createPrompt: (name, description, tags, modelId) => ipcRenderer.invoke(IpcChannels.CREATE_PROMPT, name, description, tags, modelId),
+  updatePrompt: (id, updates) => ipcRenderer.invoke(IpcChannels.UPDATE_PROMPT, id, updates),
+  updatePromptTags: (id, newTags) => ipcRenderer.invoke(IpcChannels.UPDATE_PROMPT_TAGS, id, newTags),
+  deletePrompt: (id) => ipcRenderer.invoke(IpcChannels.DELETE_PROMPT, id),
+
+  getAllModels: () => ipcRenderer.invoke(IpcChannels.GET_ALL_MODELS),
+  addModel: (model) => ipcRenderer.invoke(IpcChannels.ADD_MODEL, model),
+
+  getAllTags: () => ipcRenderer.invoke(IpcChannels.GET_ALL_TAGS),
+  addTag: (name) => ipcRenderer.invoke(IpcChannels.ADD_TAG, name),
+
+  createPromptVersion: (promptId, label, content, modelId, temperature, tokenLimit, topK, topP, note, isMajorVersion, copySamplesFromVersionId, archivePreviousVersionId) => 
+    ipcRenderer.invoke(IpcChannels.CREATE_PROMPT_VERSION, promptId, label, content, modelId, temperature, tokenLimit, topK, topP, note, isMajorVersion, copySamplesFromVersionId, archivePreviousVersionId),
+
+  createOutputSample: (versionId, name, content) => 
+    ipcRenderer.invoke(IpcChannels.CREATE_OUTPUT_SAMPLE, versionId, name, content),
+
+  getAppPath: (name) => ipcRenderer.invoke(IpcChannels.APP_GET_PATH, name),
 }
 
-contextBridge.exposeInMainWorld('App', API)
+// Expose the API to the renderer process
+contextBridge.exposeInMainWorld('promptApi', promptApi)
+

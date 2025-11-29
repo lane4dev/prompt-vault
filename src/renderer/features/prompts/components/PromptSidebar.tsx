@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "renderer/components/ui/button";
 import { Input } from "renderer/components/ui/input";
 import { ScrollArea } from "renderer/components/ui/scroll-area";
@@ -46,22 +46,22 @@ import {
   CommandItem,
 } from "renderer/components/ui/command";
 import { Checkbox } from "renderer/components/ui/checkbox";
-
-interface Prompt {
-  id: string;
-  name: string;
-  description: string;
-  tags: string[];
-  model: string;
-  lastModified: string;
-}
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "renderer/components/ui/select";
+import { IpcPromptListItem, IpcModel } from "shared/ipc-types";
 
 interface PromptSidebarProps {
   className?: string;
-  prompts: Prompt[];
-  setPrompts: React.Dispatch<React.SetStateAction<Prompt[]>>;
+  prompts: IpcPromptListItem[];
   selectedPromptId: string | null;
   setSelectedPromptId: React.Dispatch<React.SetStateAction<string | null>>;
+  onCreatePrompt: (name: string, description: string, tags: string[], modelId?: string) => Promise<void>;
+  onDeletePrompt: (id: string) => Promise<void>;
 }
 
 const AVAILABLE_TAGS = [
@@ -69,53 +69,62 @@ const AVAILABLE_TAGS = [
   "Data Analysis", "Design", "Research", "Education", "Personal",
 ];
 
-export function PromptSidebar({ 
-  className, 
+export function PromptSidebar({
+  className,
   prompts,
-  setPrompts,
   selectedPromptId,
   setSelectedPromptId,
+  onCreatePrompt,
+  onDeletePrompt,
 }: PromptSidebarProps) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [promptToDelete, setPromptToDelete] = useState<string | null>(null);
+  const [allModels, setAllModels] = useState<IpcModel[]>([]);
+
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const models = await window.promptApi.getAllModels();
+        setAllModels(models);
+      } catch (err) {
+        console.error("Failed to fetch models for sidebar:", err);
+      }
+    };
+    fetchModels();
+  }, []);
 
   // Add Prompt State
   const [isAddPromptOpen, setIsAddPromptOpen] = useState(false);
   const [newPromptTitle, setNewPromptTitle] = useState("");
   const [newPromptGoal, setNewPromptGoal] = useState("");
   const [newPromptTags, setNewPromptTags] = useState<string[]>([]);
+  const [newPromptModelId, setNewPromptModelId] = useState<string>(allModels[0]?.id || ""); // Default to first model
   const [isTagsPopoverOpen, setIsTagsPopoverOpen] = useState(false);
 
-  const handleDeletePrompt = () => {
+  useEffect(() => {
+    if (allModels.length > 0 && !newPromptModelId) {
+      setNewPromptModelId(allModels[0].id);
+    }
+  }, [allModels, newPromptModelId]);
+
+  const handleDeletePromptConfirmed = async () => {
     if (promptToDelete) {
-      setPrompts(prompts.filter((p) => p.id !== promptToDelete));
-      if (selectedPromptId === promptToDelete) {
-        setSelectedPromptId(null);
-      }
+      await onDeletePrompt(promptToDelete);
       setPromptToDelete(null);
     }
   };
 
-  const handleAddPrompt = () => {
+  const handleAddPrompt = async () => {
     if (!newPromptTitle.trim()) return;
-
-    const newPrompt = {
-      id: String(Date.now()),
-      name: newPromptTitle,
-      description: newPromptGoal,
-      tags: newPromptTags,
-      model: "gpt-4o", // Default model
-      lastModified: "Just now",
-    };
-
-    setPrompts([newPrompt, ...prompts]);
-    setSelectedPromptId(newPrompt.id);
+    
+    await onCreatePrompt(newPromptTitle.trim(), newPromptGoal.trim(), newPromptTags, newPromptModelId);
     setIsAddPromptOpen(false);
     
     // Reset form
     setNewPromptTitle("");
     setNewPromptGoal("");
     setNewPromptTags([]);
+    setNewPromptModelId(allModels[0]?.id || ""); // Reset to default model
   };
 
   return (
@@ -149,9 +158,8 @@ export function PromptSidebar({
               <div className="flex w-full flex-col gap-1">
                 <div className="flex items-center justify-between">
                   <div className="font-semibold">{prompt.name}</div>
-                  <div className="text-xs text-muted-foreground">{prompt.lastModified}</div>
+                  <div className="text-xs text-muted-foreground">{new Date(prompt.lastModified).toLocaleString()}</div>
                 </div>
-                <div className="text-xs text-muted-foreground">Model: {prompt.model}</div>
                 <div className="line-clamp-2 text-xs text-muted-foreground mt-1">
                   {prompt.description}
                 </div>
@@ -245,6 +253,21 @@ export function PromptSidebar({
               />
             </div>
             <div className="grid gap-2">
+              <Label htmlFor="model">Model</Label>
+              <Select value={newPromptModelId} onValueChange={setNewPromptModelId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allModels.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="tags">Tags</Label>
               <Popover open={isTagsPopoverOpen} onOpenChange={setIsTagsPopoverOpen}>
                 <PopoverTrigger asChild>
@@ -321,7 +344,7 @@ export function PromptSidebar({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddPromptOpen(false)}>Cancel</Button>
-            <Button onClick={handleAddPrompt} disabled={!newPromptTitle.trim()}>Create Prompt</Button>
+            <Button onClick={handleAddPrompt} disabled={!newPromptTitle.trim() || !newPromptModelId}>Create Prompt</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -338,7 +361,7 @@ export function PromptSidebar({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeletePrompt} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleDeletePromptConfirmed} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
