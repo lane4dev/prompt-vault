@@ -12,8 +12,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from "renderer/components/ui/select";
-import { Save, Copy, Clock, Pencil, Check, X, Plus, Trash2, Eye, Edit3 } from "lucide-react";
+import { Save, Copy, Clock, Pencil, Check, X, Plus, Trash2, Eye, Edit3, MoreHorizontal } from "lucide-react";
 import { cn } from "renderer/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "renderer/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "renderer/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle as DialogTitleShadcn,
+} from "renderer/components/ui/dialog";
 
 import { PromptHistorySidebar } from "./PromptHistorySidebar";
 
@@ -23,16 +49,36 @@ interface OutputSample {
   content: string;
 }
 
+interface PromptVersion {
+  id: string;
+  name: string;
+  promptContent: string;
+  // Other version-specific fields like model, temperature, etc., would go here.
+  // For now, we'll keep the main prompt detail form separate from version content
+  // but in a real app, these would be versioned too.
+}
+
 export function PromptDetailPane() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [promptName, setPromptName] = useState("Article Summarizer");
   const [tempPromptName, setTempPromptName] = useState(promptName);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
+  // Prompt Version Management
+  const [versions, setVersions] = useState<PromptVersion[]>([
+    { id: "v1", name: "v1", promptContent: "You are a helpful assistant that summarizes text..." },
+  ]);
+
+  const [activeVersionId, setActiveVersionId] = useState<string>("v1");
+  const [isRenamingVersion, setIsRenamingVersion] = useState(false);
+  const [tempVersionName, setTempVersionName] = useState("");
+  const [isDeletingVersion, setIsDeletingVersion] = useState(false);
+
   // Sample Management State
   const [samples, setSamples] = useState<OutputSample[]>([
     { id: "1", name: "Sample 1", content: "This is the first example output." }
   ]);
+
   const [activeSampleId, setActiveSampleId] = useState<string>("1");
   const [outputMode, setOutputMode] = useState<'preview' | 'edit'>('preview');
 
@@ -46,17 +92,67 @@ export function PromptDetailPane() {
     setIsEditingName(false);
   };
 
+  const activeVersion = versions.find(v => v.id === activeVersionId);
   const activeSample = samples.find(s => s.id === activeSampleId);
+
+  const handleAddVersion = () => {
+    const newId = `v${versions.length + 1}`;
+
+    const newVersion: PromptVersion = {
+      id: newId,
+      name: newId,
+      promptContent: activeVersion?.promptContent || "", // Copy content from active version
+    };
+
+    setVersions([...versions, newVersion]);
+    setActiveVersionId(newId);
+  };
+
+  const handleRenameVersion = () => {
+    if (activeVersion && tempVersionName.trim()) {
+      setVersions(versions.map(v =>
+        v.id === activeVersionId ? { ...v, name: tempVersionName.trim() } : v
+      ));
+
+      setIsRenamingVersion(false);
+      setTempVersionName("");
+    }
+  };
+
+  const handleDeleteVersion = () => {
+    const newVersions = versions.filter(v => v.id !== activeVersionId);
+
+    setVersions(newVersions);
+
+    if (newVersions.length > 0) {
+      setActiveVersionId(newVersions[newVersions.length - 1].id); // Select the last one
+    } else {
+      // No versions left, create a new default one
+      const newId = "v1";
+
+      setVersions([{ id: newId, name: newId, promptContent: "" }]);
+      setActiveVersionId(newId);
+    }
+    setIsDeletingVersion(false);
+  };
+
+  const handlePromptContentChange = (newContent: string) => {
+    setVersions(versions.map(v =>
+      v.id === activeVersionId ? { ...v, promptContent: newContent } : v
+    ));
+  };
 
   const handleAddSample = () => {
     const newId = String(Date.now());
     const newSample = { id: newId, name: `Sample ${samples.length + 1}`, content: "" };
+
     setSamples([...samples, newSample]);
     setActiveSampleId(newId);
   };
 
   const handleDeleteSample = (idToDelete: string) => {
     const newSamples = samples.filter(s => s.id !== idToDelete);
+
     setSamples(newSamples);
 
     if (activeSampleId === idToDelete && newSamples.length > 0) {
@@ -71,15 +167,18 @@ export function PromptDetailPane() {
   };
 
   const [model, setModel] = useState("gpt-4o");
+
   const handleModelChange = (value: string) => {
     setModel(value);
   };
 
+  const [promptMode, setPromptMode] = useState<'api' | 'chat'>('api');
+
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Top Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b">
-        <div className="flex items-center gap-4 flex-1">
+      <div className="flex items-center px-6 py-4 border-b">
+        <div className="flex items-center gap-4">
           {isEditingName ? (
             <div className="flex items-center gap-2">
               <Input
@@ -107,15 +206,57 @@ export function PromptDetailPane() {
               </Button>
             </div>
           )}
-          <Tabs defaultValue="v1" className="h-8">
-            <TabsList className="h-9">
-              <TabsTrigger value="v1">v1</TabsTrigger>
-              <TabsTrigger value="v2">v2</TabsTrigger>
-              <TabsTrigger value="new">+</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <Select value={promptMode} onValueChange={(v: 'api' | 'chat') => setPromptMode(v)}>
+            <SelectTrigger className="w-[110px] h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="api">API Call</SelectItem>
+              <SelectItem value="chat">Chat</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <div className="flex items-center gap-2">
+        {/* Centered Version Management Group */}
+        <div className="flex flex-1 justify-center items-center gap-1">
+          <div className="flex items-center gap-1 rounded-md bg-muted/50 p-1">
+            <Tabs value={activeVersionId} onValueChange={setActiveVersionId} className="h-8">
+              <TabsList className="h-7">
+                {versions.map((version) => (
+                  <TabsTrigger key={version.id} value={version.id}>
+                    {version.name}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleAddVersion} title="Add new version">
+              <Plus className="h-4 w-4" />
+            </Button>
+            {/* Dropdown for Version Actions */}
+            {activeVersion && (versions.length > 0) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => { setTempVersionName(activeVersion.name); setIsRenamingVersion(true); }}>
+                    Rename
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    disabled={versions.length <= 1}
+                    onClick={() => setIsDeletingVersion(true)}
+                  >
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 ml-auto">
           <Button variant="outline" size="sm" onClick={() => setIsHistoryOpen(true)}>
             <Clock className="w-4 h-4 mr-2" />
             History
@@ -129,7 +270,6 @@ export function PromptDetailPane() {
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-auto p-6 space-y-6">
-
         {/* Metadata Form */}
         <div className="grid grid-cols-2 gap-6">
           <div className="space-y-2">
@@ -150,28 +290,27 @@ export function PromptDetailPane() {
             </Select>
           </div>
         </div>
-
-        <div className="grid grid-cols-4 gap-4">
-          <div className="space-y-2">
-            <Label>Temperature</Label>
-            <Input type="number" step="0.1" defaultValue="0.7" />
+        {promptMode === 'api' && (
+          <div className="grid grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <Label>Temperature</Label>
+              <Input type="number" step="0.1" defaultValue="0.7" />
+            </div>
+            <div className="space-y-2">
+              <Label>Token Limit</Label>
+              <Input type="number" defaultValue="2000" />
+            </div>
+            <div className="space-y-2">
+              <Label>Top-K</Label>
+              <Input type="number" />
+            </div>
+            <div className="space-y-2">
+              <Label>Top-P</Label>
+              <Input type="number" />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label>Token Limit</Label>
-            <Input type="number" defaultValue="2000" />
-          </div>
-          <div className="space-y-2">
-            <Label>Top-K</Label>
-            <Input type="number" />
-          </div>
-          <div className="space-y-2">
-            <Label>Top-P</Label>
-            <Input type="number" />
-          </div>
-        </div>
-
+        )}
         <Separator />
-
         {/* Editor Area */}
         <div className="grid grid-cols-2 gap-6 h-[500px]">
           {/* Prompt Editor */}
@@ -185,17 +324,16 @@ export function PromptDetailPane() {
             <Textarea
               className="flex-1 font-mono text-sm resize-none"
               placeholder="Enter your system prompt here..."
-              defaultValue="You are a helpful assistant that summarizes text..."
+              defaultValue={activeVersion?.promptContent}
+              onChange={(e) => handlePromptContentChange(e.target.value)}
             />
           </div>
-
           {/* Output Samples Area */}
           <div className="flex flex-col gap-2 h-full border rounded-md p-2 bg-muted/10">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <Label className="text-base font-semibold">Output Samples</Label>
               </div>
-
               {/* Mode Toggle */}
               <div className="flex items-center bg-muted rounded-lg p-1">
                 <Button
@@ -216,7 +354,6 @@ export function PromptDetailPane() {
                 </Button>
               </div>
             </div>
-
             {/* Content Logic based on Mode */}
             <div className="flex flex-col gap-2 flex-1">
               {/* Sample List / Tabs */}
@@ -235,14 +372,12 @@ export function PromptDetailPane() {
                     {sample.name}
                   </button>
                 ))}
-
                 {outputMode === 'edit' && (
                   <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full" onClick={handleAddSample}>
                     <Plus className="h-3 w-3" />
                   </Button>
                 )}
               </div>
-
               {/* Active Sample Content */}
               {activeSample ? (
                 <div className="flex flex-col gap-2 flex-1">
@@ -264,7 +399,6 @@ export function PromptDetailPane() {
                       </Button>
                     </div>
                   )}
-
                   <Textarea
                     value={activeSample.content}
                     onChange={(e) => handleSampleChange('content', e.target.value)}
@@ -286,6 +420,53 @@ export function PromptDetailPane() {
         </div>
       </div>
       <PromptHistorySidebar open={isHistoryOpen} onOpenChange={setIsHistoryOpen} />
+
+      {/* Rename Version Dialog */}
+      <Dialog open={isRenamingVersion} onOpenChange={setIsRenamingVersion}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitleShadcn>Rename Version</DialogTitleShadcn>
+            <DialogDescription>
+              Enter a new name for version "{activeVersion?.name}".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Name
+              </Label>
+              <Input
+                id="name"
+                value={tempVersionName}
+                onChange={(e) => setTempVersionName(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRenamingVersion(false)}>Cancel</Button>
+            <Button onClick={handleRenameVersion}>Rename</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Version Alert Dialog */}
+      <AlertDialog open={isDeletingVersion} onOpenChange={setIsDeletingVersion}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the "{activeVersion?.name}" version.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteVersion} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
