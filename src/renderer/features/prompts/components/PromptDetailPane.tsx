@@ -166,21 +166,20 @@ export function PromptDetailPane() {
 
         {/* Editor Area */}
         <div className="grid grid-cols-2 gap-6 h-[500px]">
-          {/* Prompt Editor */}
-          <div className="flex flex-col gap-2 h-full">
-            <div className="flex items-center justify-between">
-              <Label className="text-base font-semibold">Prompt</Label>
-              <Button variant="ghost" size="icon" className="h-6 w-6">
-                <Copy className="h-3 w-3" />
-              </Button>
-            </div>
-            <Textarea
-              className="flex-1 font-mono text-sm resize-none"
-              placeholder="Enter your system prompt here..."
-              defaultValue="You are a helpful assistant that summarizes text..."
-            />
-          </div>
-
+                    {/* Prompt Editor */}
+                    <div className="flex flex-col gap-2 h-full border rounded-md p-2 bg-muted/10">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-base font-semibold">Prompt</Label>
+                        <Button variant="ghost" size="icon" className="h-6 w-6">
+                           <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <Textarea 
+                        className="flex-1 font-mono text-sm resize-none" 
+                        placeholder="Enter your system prompt here..."
+                        defaultValue="You are a helpful assistant that summarizes text..."
+                      />
+                    </div>
           {/* Output Samples Area */}
           <div className="flex flex-col gap-2 h-full border rounded-md p-2 bg-muted/10">
             <div className="flex items-center justify-between mb-2">
