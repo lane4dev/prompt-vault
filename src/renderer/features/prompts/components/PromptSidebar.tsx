@@ -1,9 +1,11 @@
-import { Search, Plus, Tag } from "lucide-react";
+import { useState } from "react";
+import { Search, Plus, Tag, Settings } from "lucide-react";
 import { Button } from "renderer/components/ui/button";
 import { Input } from "renderer/components/ui/input";
 import { ScrollArea } from "renderer/components/ui/scroll-area";
 import { Badge } from "renderer/components/ui/badge";
 import { cn } from "renderer/lib/utils";
+import { SettingsDialog } from "renderer/features/settings/components/SettingsDialog";
 
 // Dummy data for static UI
 const MOCK_PROMPTS = [
@@ -35,6 +37,8 @@ interface PromptSidebarProps {
 }
 
 export function PromptSidebar({ className }: PromptSidebarProps) {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
   return (
     <div className={cn("flex flex-col h-full border-r bg-muted/10", className)}>
       {/* Header: Search & Add */}
@@ -83,6 +87,20 @@ export function PromptSidebar({ className }: PromptSidebarProps) {
           ))}
         </div>
       </ScrollArea>
+
+      {/* Footer: Settings Button */}
+      <div className="p-4 border-t">
+        <Button 
+          variant="ghost" 
+          className="w-full justify-start"
+          onClick={() => setIsSettingsOpen(true)}
+        >
+          <Settings className="h-4 w-4 mr-2" />
+          Settings
+        </Button>
+      </div>
+
+      <SettingsDialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
     </div>
   );
 }
