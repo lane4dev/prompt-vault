@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "renderer/components/ui/button";
 import { Input } from "renderer/components/ui/input";
 import { Label } from "renderer/components/ui/label";
@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "renderer/components/ui/select";
-import { Save, Copy, Clock, Pencil, Check, X, Plus, Trash2, Eye, Edit3, MoreHorizontal } from "lucide-react";
+import { Save, Copy, Clock, Pencil, Check, X, Plus, Trash2, Eye, Edit3, MoreHorizontal, ChevronDown } from "lucide-react";
 import { cn } from "renderer/lib/utils";
 import {
   DropdownMenu,
@@ -30,7 +30,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "renderer/components/ui/alert-dialog";
 import {
   Dialog,
@@ -40,8 +39,28 @@ import {
   DialogHeader,
   DialogTitle as DialogTitleShadcn,
 } from "renderer/components/ui/dialog";
+import { ScrollArea, ScrollBar } from "renderer/components/ui/scroll-area";
+import { Badge } from "renderer/components/ui/badge";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "renderer/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "renderer/components/ui/command";
+import { Checkbox } from "renderer/components/ui/checkbox";
 
 import { PromptHistorySidebar } from "./PromptHistorySidebar";
+
+const AVAILABLE_TAGS = [
+  "Writing", "Productivity", "Coding", "Development", "Business", "Marketing",
+  "Data Analysis", "Design", "Research", "Education", "Personal",
+];
 
 interface OutputSample {
   id: string;
@@ -53,23 +72,45 @@ interface PromptVersion {
   id: string;
   name: string;
   promptContent: string;
-  // Other version-specific fields like model, temperature, etc., would go here.
-  // For now, we'll keep the main prompt detail form separate from version content
-  // but in a real app, these would be versioned too.
 }
 
-export function PromptDetailPane() {
+interface Prompt {
+  id: string;
+  name: string;
+  description: string;
+  tags: string[];
+  model: string;
+  lastModified: string;
+}
+
+interface PromptDetailPaneProps {
+  prompts: Prompt[];
+  selectedPromptId: string | null;
+  onUpdatePromptTags: (promptId: string, newTags: string[]) => void;
+}
+
+export function PromptDetailPane({ prompts, selectedPromptId, onUpdatePromptTags }: PromptDetailPaneProps) {
+  const currentPrompt = prompts.find(p => p.id === selectedPromptId);
+
   const [isEditingName, setIsEditingName] = useState(false);
-  const [promptName, setPromptName] = useState("Article Summarizer");
-  const [tempPromptName, setTempPromptName] = useState(promptName);
+  const [tempPromptName, setTempPromptName] = useState(currentPrompt?.name || "");
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
-  // Prompt Version Management
-  const [versions, setVersions] = useState<PromptVersion[]>([
-    { id: "v1", name: "v1", promptContent: "You are a helpful assistant that summarizes text..." },
-  ]);
+  // State for Tags Popover
+  const [isTagsPopoverOpen, setIsTagsPopoverOpen] = useState(false);
+  const [currentPromptTags, setCurrentPromptTags] = useState<string[]>(currentPrompt?.tags || []);
 
-  const [activeVersionId, setActiveVersionId] = useState<string>("v1");
+  useEffect(() => {
+    setTempPromptName(currentPrompt?.name || "");
+    setCurrentPromptTags(currentPrompt?.tags || []);
+  }, [currentPrompt]);
+
+  // Prompt Version Management
+  const [versions, setVersions] = useState<PromptVersion[]>(
+    currentPrompt ? [{ id: "v1", name: "v1", promptContent: currentPrompt.description || "" }] : []
+  );
+
+  const [activeVersionId, setActiveVersionId] = useState<string | null>(currentPrompt ? "v1" : null);
   const [isRenamingVersion, setIsRenamingVersion] = useState(false);
   const [tempVersionName, setTempVersionName] = useState("");
   const [isDeletingVersion, setIsDeletingVersion] = useState(false);
@@ -78,17 +119,40 @@ export function PromptDetailPane() {
   const [samples, setSamples] = useState<OutputSample[]>([
     { id: "1", name: "Sample 1", content: "This is the first example output." }
   ]);
-
   const [activeSampleId, setActiveSampleId] = useState<string>("1");
   const [outputMode, setOutputMode] = useState<'preview' | 'edit'>('preview');
 
+  useEffect(() => {
+    // Reset versions when prompt changes
+    if (currentPrompt) {
+      setVersions([{ id: "v1", name: "v1", promptContent: currentPrompt.description || "" }]);
+      setActiveVersionId("v1");
+    } else {
+      setVersions([]);
+      setActiveVersionId(null);
+    }
+  }, [currentPrompt]);
+
   const handleSaveName = () => {
-    setPromptName(tempPromptName);
+    if (currentPrompt && tempPromptName.trim() !== currentPrompt.name) {
+      // This means we are editing the prompt name, not tags
+      // TODO: Implement actual prompt name update via a prop
+      // For now, just revert or update locally if no global update mechanism is passed
+    }
     setIsEditingName(false);
   };
 
+  const handleTagToggle = (tag: string) => {
+    if (!currentPrompt) return;
+    const newTags = currentPromptTags.includes(tag)
+      ? currentPromptTags.filter((t) => t !== tag)
+      : [...currentPromptTags, tag];
+    setCurrentPromptTags(newTags);
+    onUpdatePromptTags(currentPrompt.id, newTags);
+  };
+
   const handleCancelEdit = () => {
-    setTempPromptName(promptName);
+    setTempPromptName(currentPrompt?.name || "");
     setIsEditingName(false);
   };
 
@@ -130,7 +194,7 @@ export function PromptDetailPane() {
       // No versions left, create a new default one
       const newId = "v1";
 
-      setVersions([{ id: newId, name: newId, promptContent: "" }]);
+      setVersions([{ id: newId, name: newId, promptContent: currentPrompt?.description || "" }]);
       setActiveVersionId(newId);
     }
     setIsDeletingVersion(false);
@@ -166,7 +230,11 @@ export function PromptDetailPane() {
     ));
   };
 
-  const [model, setModel] = useState("gpt-4o");
+  const [model, setModel] = useState(currentPrompt?.model || "gpt-4o");
+
+  useEffect(() => {
+    setModel(currentPrompt?.model || "gpt-4o");
+  }, [currentPrompt]);
 
   const handleModelChange = (value: string) => {
     setModel(value);
@@ -174,97 +242,158 @@ export function PromptDetailPane() {
 
   const [promptMode, setPromptMode] = useState<'api' | 'chat'>('api');
 
+  if (!currentPrompt) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center text-muted-foreground">
+        Select a prompt from the sidebar or create a new one.
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Top Header */}
-      <div className="flex items-center px-6 py-4 border-b">
-        <div className="flex items-center gap-4">
-          {isEditingName ? (
-            <div className="flex items-center gap-2">
-              <Input
-                className="text-lg font-bold w-[300px] px-2"
-                value={tempPromptName}
-                onChange={(e) => setTempPromptName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSaveName();
-                  if (e.key === "Escape") handleCancelEdit();
-                }}
-                autoFocus
-              />
-              <Button variant="ghost" size="icon" onClick={handleSaveName}>
-                <Check className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={handleCancelEdit}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold tracking-tight">{promptName}</h2>
-              <Button variant="ghost" size="icon" onClick={() => setIsEditingName(true)}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
-          <Select value={promptMode} onValueChange={(v: 'api' | 'chat') => setPromptMode(v)}>
-            <SelectTrigger className="w-[110px] h-8">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="api">API Call</SelectItem>
-              <SelectItem value="chat">Chat</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        {/* Centered Version Management Group */}
-        <div className="flex flex-1 justify-center items-center gap-1">
-          <div className="flex items-center gap-1 rounded-md bg-muted/50 p-1">
-            <Tabs value={activeVersionId} onValueChange={setActiveVersionId} className="h-8">
-              <TabsList className="h-7">
-                {versions.map((version) => (
-                  <TabsTrigger key={version.id} value={version.id}>
-                    {version.name}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleAddVersion} title="Add new version">
-              <Plus className="h-4 w-4" />
-            </Button>
-            {/* Dropdown for Version Actions */}
-            {activeVersion && (versions.length > 0) && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => { setTempVersionName(activeVersion.name); setIsRenamingVersion(true); }}>
-                    Rename
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    disabled={versions.length <= 1}
-                    onClick={() => setIsDeletingVersion(true)}
-                  >
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+      <div className="flex flex-col px-6 py-4 border-b gap-4">
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center gap-4">
+            {isEditingName ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  className="text-lg font-bold w-[300px] px-2"
+                  value={tempPromptName}
+                  onChange={(e) => setTempPromptName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveName();
+                    if (e.key === "Escape") handleCancelEdit();
+                  }}
+                  autoFocus
+                />
+                <Button variant="ghost" size="icon" onClick={handleSaveName}>
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={handleCancelEdit}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold tracking-tight">{currentPrompt.name}</h2>
+                <Button variant="ghost" size="icon" onClick={() => setIsEditingName(true)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </div>
             )}
+            <Select value={promptMode} onValueChange={(v: 'api' | 'chat') => setPromptMode(v)}>
+              <SelectTrigger className="w-[110px] h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="api">API Call</SelectItem>
+                <SelectItem value="chat">Chat</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Centered Version Management Group */}
+          <div className="flex flex-1 justify-center items-center px-4">
+            <div className="flex items-center gap-1 rounded-md bg-muted/50 p-1">
+              <Tabs value={activeVersionId || ""} onValueChange={setActiveVersionId} className="h-8">
+                <TabsList className="h-7">
+                  {versions.map((version) => (
+                    <TabsTrigger key={version.id} value={version.id}>
+                      {version.name}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleAddVersion} title="Add new version">
+                <Plus className="h-4 w-4" />
+              </Button>
+              {/* Dropdown for Version Actions */}
+              {activeVersion && (versions.length > 0) && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-7 w-7">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => { setTempVersionName(activeVersion.name); setIsRenamingVersion(true); }}>
+                      Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      disabled={versions.length <= 1}
+                      onClick={() => setIsDeletingVersion(true)}
+                    >
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setIsHistoryOpen(true)}>
+              <Clock className="w-4 h-4 mr-2" />
+              History
+            </Button>
+            <Button size="sm">
+              <Save className="w-4 h-4 mr-2" />
+              Save
+            </Button>
           </div>
         </div>
-        <div className="flex items-center gap-2 ml-auto">
-          <Button variant="outline" size="sm" onClick={() => setIsHistoryOpen(true)}>
-            <Clock className="w-4 h-4 mr-2" />
-            History
-          </Button>
-          <Button size="sm">
-            <Save className="w-4 h-4 mr-2" />
-            Save
-          </Button>
+
+        {/* Tags Display */}
+        <div className="flex items-center gap-2 mt-2">
+          <ScrollArea className="w-full whitespace-nowrap">
+            <div className="flex w-max space-x-2 p-1">
+              {currentPrompt.tags.map((tag) => (
+                <Badge key={tag} variant="secondary">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
+
+          <Popover open={isTagsPopoverOpen} onOpenChange={setIsTagsPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 ml-auto shrink-0">
+                <Plus className="mr-2 h-4 w-4" />
+                Edit Tags
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[200px] p-0" align="end">
+              <Command>
+                <CommandInput placeholder="Search tags..." />
+                <CommandEmpty>No tag found.</CommandEmpty>
+                <CommandGroup>
+                  <ScrollArea className="h-48">
+                    {AVAILABLE_TAGS.map((tag) => {
+                      const isSelected = currentPromptTags.includes(tag);
+                      return (
+                        <CommandItem
+                          key={tag}
+                          onSelect={() => handleTagToggle(tag)}
+                        >
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => handleTagToggle(tag)}
+                            className="mr-2"
+                          />
+                          {tag}
+                        </CommandItem>
+                      );
+                    })}
+                  </ScrollArea>
+                </CommandGroup>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
@@ -274,7 +403,7 @@ export function PromptDetailPane() {
         <div className="grid grid-cols-2 gap-6">
           <div className="space-y-2">
             <Label>Goal</Label>
-            <Input placeholder="One sentence goal..." defaultValue="Summarize news articles" />
+            <Input placeholder="One sentence goal..." defaultValue={currentPrompt.description} />
           </div>
           <div className="space-y-2">
             <Label>Model</Label>
@@ -324,7 +453,7 @@ export function PromptDetailPane() {
             <Textarea
               className="flex-1 font-mono text-sm resize-none"
               placeholder="Enter your system prompt here..."
-              defaultValue={activeVersion?.promptContent}
+              value={activeVersion?.promptContent || ""}
               onChange={(e) => handlePromptContentChange(e.target.value)}
             />
           </div>

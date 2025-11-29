@@ -4,7 +4,9 @@ import { Input } from "renderer/components/ui/input";
 import { ScrollArea } from "renderer/components/ui/scroll-area";
 import { Badge } from "renderer/components/ui/badge";
 import { Separator } from "renderer/components/ui/separator";
-import { Search, Plus, Filter, Folder, Hash, Settings, MoreHorizontal, Trash2 } from "lucide-react";
+import { Label } from "renderer/components/ui/label";
+import { Textarea } from "renderer/components/ui/textarea";
+import { Search, Plus, Filter, Folder, Hash, Settings, MoreHorizontal, Trash2, ChevronDown } from "lucide-react";
 import { cn } from "renderer/lib/utils";
 import { SettingsDialog } from "renderer/features/settings/components/SettingsDialog";
 import {
@@ -23,44 +25,66 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "renderer/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "renderer/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "renderer/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "renderer/components/ui/command";
+import { Checkbox } from "renderer/components/ui/checkbox";
+
+interface Prompt {
+  id: string;
+  name: string;
+  description: string;
+  tags: string[];
+  model: string;
+  lastModified: string;
+}
 
 interface PromptSidebarProps {
   className?: string;
+  prompts: Prompt[];
+  setPrompts: React.Dispatch<React.SetStateAction<Prompt[]>>;
+  selectedPromptId: string | null;
+  setSelectedPromptId: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
-// Mock data moved inside component state for interactivity
-const INITIAL_PROMPTS = [
-  {
-    id: "1",
-    name: "Article Summarizer",
-    description: "Summarize news articles into bullet points.",
-    tags: ["Writing", "Productivity"],
-    model: "gpt-4o",
-    lastModified: "2h ago",
-  },
-  {
-    id: "2",
-    name: "Code Refactor Expert",
-    description: "Refactor messy code into clean, solid patterns.",
-    tags: ["Coding", "Development"],
-    model: "claude-3.5-sonnet",
-    lastModified: "1d ago",
-  },
-  {
-    id: "3",
-    name: "Email Polisher",
-    description: "Make emails sound more professional.",
-    tags: ["Writing", "Business"],
-    model: "gpt-4o",
-    lastModified: "3d ago",
-  },
+const AVAILABLE_TAGS = [
+  "Writing", "Productivity", "Coding", "Development", "Business", "Marketing",
+  "Data Analysis", "Design", "Research", "Education", "Personal",
 ];
 
-export function PromptSidebar({ className }: PromptSidebarProps) {
+export function PromptSidebar({ 
+  className, 
+  prompts,
+  setPrompts,
+  selectedPromptId,
+  setSelectedPromptId,
+}: PromptSidebarProps) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [prompts, setPrompts] = useState(INITIAL_PROMPTS);
-  const [selectedPromptId, setSelectedPromptId] = useState<string | null>("1");
   const [promptToDelete, setPromptToDelete] = useState<string | null>(null);
+
+  // Add Prompt State
+  const [isAddPromptOpen, setIsAddPromptOpen] = useState(false);
+  const [newPromptTitle, setNewPromptTitle] = useState("");
+  const [newPromptGoal, setNewPromptGoal] = useState("");
+  const [newPromptTags, setNewPromptTags] = useState<string[]>([]);
+  const [isTagsPopoverOpen, setIsTagsPopoverOpen] = useState(false);
 
   const handleDeletePrompt = () => {
     if (promptToDelete) {
@@ -72,13 +96,35 @@ export function PromptSidebar({ className }: PromptSidebarProps) {
     }
   };
 
+  const handleAddPrompt = () => {
+    if (!newPromptTitle.trim()) return;
+
+    const newPrompt = {
+      id: String(Date.now()),
+      name: newPromptTitle,
+      description: newPromptGoal,
+      tags: newPromptTags,
+      model: "gpt-4o", // Default model
+      lastModified: "Just now",
+    };
+
+    setPrompts([newPrompt, ...prompts]);
+    setSelectedPromptId(newPrompt.id);
+    setIsAddPromptOpen(false);
+    
+    // Reset form
+    setNewPromptTitle("");
+    setNewPromptGoal("");
+    setNewPromptTags([]);
+  };
+
   return (
     <div className={cn("flex flex-col h-full border-r bg-muted/10", className)}>
       {/* Header: Search & Add */}
       <div className="p-4 space-y-4 border-b">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold tracking-tight">Prompts</h2>
-          <Button size="icon" variant="ghost">
+          <Button size="icon" variant="ghost" onClick={() => setIsAddPromptOpen(true)}>
             <Plus className="h-4 w-4" />
           </Button>
         </div>
@@ -112,11 +158,16 @@ export function PromptSidebar({ className }: PromptSidebarProps) {
               </div>
               
               <div className="flex items-center gap-2 mt-2">
-                {prompt.tags.map((tag) => (
+                {prompt.tags.slice(0, 3).map((tag) => (
                   <Badge key={tag} variant="secondary" className="px-1 py-0 text-[10px]">
                     {tag}
                   </Badge>
                 ))}
+                {prompt.tags.length > 3 && (
+                  <Badge variant="secondary" className="px-1 py-0 text-[10px]">
+                    +{prompt.tags.length - 3} more
+                  </Badge>
+                )}
               </div>
 
               {/* Dropdown Menu - Visible on Hover */}
@@ -164,6 +215,116 @@ export function PromptSidebar({ className }: PromptSidebarProps) {
       </div>
 
       <SettingsDialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
+
+      {/* Add Prompt Dialog */}
+      <Dialog open={isAddPromptOpen} onOpenChange={setIsAddPromptOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Prompt</DialogTitle>
+            <DialogDescription>
+              Start a new prompt engineering session.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                placeholder="e.g., Email Polisher"
+                value={newPromptTitle}
+                onChange={(e) => setNewPromptTitle(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="goal">Goal</Label>
+              <Textarea
+                id="goal"
+                placeholder="What do you want this prompt to achieve?"
+                value={newPromptGoal}
+                onChange={(e) => setNewPromptGoal(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="tags">Tags</Label>
+              <Popover open={isTagsPopoverOpen} onOpenChange={setIsTagsPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between h-9"
+                  >
+                    <div className="flex flex-wrap gap-1 overflow-hidden mr-2">
+                      {newPromptTags.length > 0
+                        ? (
+                          <>
+                            {newPromptTags.slice(0, 3).map((tag) => (
+                              <Badge
+                                key={tag}
+                                variant="secondary"
+                                className=""
+                              >
+                                {tag}
+                              </Badge>
+                            ))}
+                            {newPromptTags.length > 3 && (
+                              <Badge variant="secondary" className="">
+                                +{newPromptTags.length - 3} more
+                              </Badge>
+                            )}
+                          </>
+                        )
+                        : "Select tags..."}
+                    </div>
+                    <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                  <Command>
+                    <CommandInput placeholder="Search tags..." />
+                    <CommandEmpty>No tag found.</CommandEmpty>
+                    <CommandGroup>
+                      <ScrollArea className="h-48">
+                        {AVAILABLE_TAGS.map((tag) => {
+                          const isSelected = newPromptTags.includes(tag);
+                          return (
+                            <CommandItem
+                              key={tag}
+                              onSelect={() => {
+                                setNewPromptTags(
+                                  isSelected
+                                    ? newPromptTags.filter((t) => t !== tag)
+                                    : [...newPromptTags, tag]
+                                );
+                              }}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => {
+                                  setNewPromptTags(
+                                    isSelected
+                                      ? newPromptTags.filter((t) => t !== tag)
+                                      : [...newPromptTags, tag]
+                                  );
+                                }}
+                                className="mr-2"
+                              />
+                              {tag}
+                            </CommandItem>
+                          );
+                        })}
+                      </ScrollArea>
+                    </CommandGroup>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddPromptOpen(false)}>Cancel</Button>
+            <Button onClick={handleAddPrompt} disabled={!newPromptTitle.trim()}>Create Prompt</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!promptToDelete} onOpenChange={(open) => !open && setPromptToDelete(null)}>
