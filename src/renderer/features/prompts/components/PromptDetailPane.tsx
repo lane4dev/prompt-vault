@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { Button } from "renderer/components/ui/button";
 import { Input } from "renderer/components/ui/input";
 import { Label } from "renderer/components/ui/label";
 import { Textarea } from "renderer/components/ui/textarea";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "renderer/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "renderer/components/ui/tabs";
 import { Separator } from "renderer/components/ui/separator";
 import {
   Select,
@@ -11,18 +12,55 @@ import {
   SelectTrigger,
   SelectValue,
 } from "renderer/components/ui/select";
-import { Save, Play, Copy, Clock } from "lucide-react";
+import { Save, Play, Copy, Clock, Pencil, Check, X } from "lucide-react";
 
 export function PromptDetailPane() {
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [promptName, setPromptName] = useState("Article Summarizer");
+  const [tempPromptName, setTempPromptName] = useState(promptName);
+
+  const handleSaveName = () => {
+    setPromptName(tempPromptName);
+    setIsEditingName(false);
+  };
+
+  const handleCancelEdit = () => {
+    setTempPromptName(promptName);
+    setIsEditingName(false);
+  };
+
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Top Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b">
         <div className="flex items-center gap-4 flex-1">
-          <Input
-            className="text-lg font-bold border-transparent hover:border-input focus:border-input w-[300px] px-2"
-            defaultValue="Article Summarizer"
-          />
+          {isEditingName ? (
+            <div className="flex items-center gap-2">
+              <Input
+                className="text-lg font-bold w-[300px] px-2"
+                value={tempPromptName}
+                onChange={(e) => setTempPromptName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveName();
+                  if (e.key === "Escape") handleCancelEdit();
+                }}
+                autoFocus
+              />
+              <Button variant="ghost" size="icon" onClick={handleSaveName}>
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleCancelEdit}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold tracking-tight">{promptName}</h2>
+              <Button variant="ghost" size="icon" onClick={() => setIsEditingName(true)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
           <Tabs defaultValue="v1" className="h-8">
             <TabsList className="h-9">
               <TabsTrigger value="v1">v1</TabsTrigger>
