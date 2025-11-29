@@ -15,6 +15,8 @@ import {
 import { Save, Copy, Clock, Pencil, Check, X, Plus, Trash2, Eye, Edit3 } from "lucide-react";
 import { cn } from "renderer/lib/utils";
 
+import { PromptHistorySidebar } from "./PromptHistorySidebar";
+
 interface OutputSample {
   id: string;
   name: string;
@@ -25,6 +27,7 @@ export function PromptDetailPane() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [promptName, setPromptName] = useState("Article Summarizer");
   const [tempPromptName, setTempPromptName] = useState(promptName);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // Sample Management State
   const [samples, setSamples] = useState<OutputSample[]>([
@@ -65,6 +68,11 @@ export function PromptDetailPane() {
     setSamples(samples.map(s =>
       s.id === activeSampleId ? { ...s, [key]: value } : s
     ));
+  };
+
+  const [model, setModel] = useState("gpt-4o");
+  const handleModelChange = (value: string) => {
+    setModel(value);
   };
 
   return (
@@ -108,7 +116,7 @@ export function PromptDetailPane() {
           </Tabs>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={() => setIsHistoryOpen(true)}>
             <Clock className="w-4 h-4 mr-2" />
             History
           </Button>
@@ -130,7 +138,7 @@ export function PromptDetailPane() {
           </div>
           <div className="space-y-2">
             <Label>Model</Label>
-            <Select defaultValue="gpt-4o">
+            <Select value={model} onValueChange={handleModelChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Select model" />
               </SelectTrigger>
@@ -166,20 +174,21 @@ export function PromptDetailPane() {
 
         {/* Editor Area */}
         <div className="grid grid-cols-2 gap-6 h-[500px]">
-                    {/* Prompt Editor */}
-                    <div className="flex flex-col gap-2 h-full border rounded-md p-2 bg-muted/10">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-base font-semibold">Prompt</Label>
-                        <Button variant="ghost" size="icon" className="h-6 w-6">
-                           <Copy className="h-3 w-3" />
-                        </Button>
-                      </div>
-                      <Textarea 
-                        className="flex-1 font-mono text-sm resize-none" 
-                        placeholder="Enter your system prompt here..."
-                        defaultValue="You are a helpful assistant that summarizes text..."
-                      />
-                    </div>
+          {/* Prompt Editor */}
+          <div className="flex flex-col gap-2 h-full border rounded-md p-2 bg-muted/10">
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-semibold">Prompt</Label>
+              <Button variant="ghost" size="icon" className="h-6 w-6">
+                <Copy className="h-3 w-3" />
+              </Button>
+            </div>
+            <Textarea
+              className="flex-1 font-mono text-sm resize-none"
+              placeholder="Enter your system prompt here..."
+              defaultValue="You are a helpful assistant that summarizes text..."
+            />
+          </div>
+
           {/* Output Samples Area */}
           <div className="flex flex-col gap-2 h-full border rounded-md p-2 bg-muted/10">
             <div className="flex items-center justify-between mb-2">
@@ -276,6 +285,7 @@ export function PromptDetailPane() {
           </div>
         </div>
       </div>
+      <PromptHistorySidebar open={isHistoryOpen} onOpenChange={setIsHistoryOpen} />
     </div>
   );
 }
