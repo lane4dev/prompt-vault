@@ -12,9 +12,17 @@ import { Label } from "renderer/components/ui/label";
 import { Switch } from "renderer/components/ui/switch";
 import { Separator } from "renderer/components/ui/separator";
 import { ScrollArea } from "renderer/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "renderer/components/ui/select";
 import { Settings, Monitor, Cpu, Info, Plus, Trash2 } from "lucide-react";
 import { cn } from "renderer/lib/utils";
 import { IpcModel } from "shared/ipc-types";
+import { useTheme } from "renderer/components/theme-provider";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -27,6 +35,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [models, setModels] = useState<IpcModel[]>([]);
   const [newModelName, setNewModelName] = useState("");
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     if (open && activeTab === 'models') {
@@ -91,7 +100,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[900px] h-[500px] p-0 gap-0 overflow-hidden flex">
+      <DialogContent className="sm:max-w-[800px] h-[650px] p-0 gap-0 overflow-hidden flex">
         <DialogTitle className="sr-only">Settings</DialogTitle>
         {/* Left Sidebar: Navigation */}
         <div className="w-[200px] bg-muted/30 border-r flex flex-col p-2 space-y-1">
@@ -142,21 +151,21 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 <div className="space-y-4">
                    <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label className="text-base">Dark Mode</Label>
+                      <Label className="text-base">Theme</Label>
                       <p className="text-sm text-muted-foreground">
-                        Toggle application dark mode.
+                        Select the application theme.
                       </p>
                     </div>
-                    <Switch />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="text-base">Auto-Save</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Automatically save prompts while editing.
-                      </p>
-                    </div>
-                    <Switch defaultChecked />
+                    <Select value={theme} onValueChange={(val: any) => setTheme(val)}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Select theme" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="light">Light</SelectItem>
+                        <SelectItem value="dark">Dark</SelectItem>
+                        <SelectItem value="system">System</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
