@@ -60,6 +60,15 @@ import { PromptHistorySidebar } from "./PromptHistorySidebar";
 import { IpcPromptVersion, IpcOutputSample, IpcModel } from "shared/ipc-types";
 import { usePromptStore } from "renderer/stores/usePromptStore";
 
+const formatTokens = (num: number): string => {
+  if (num >= 1_000_000) {
+    return (num / 1_000_000).toFixed(0) + "M";
+  } else if (num >= 1_000) {
+    return (num / 1_000).toFixed(0) + "K";
+  }
+  return num.toString();
+};
+
 const AVAILABLE_TAGS = [
   "Writing", "Productivity", "Coding", "Development", "Business", "Marketing",
   "Data Analysis", "Design", "Research", "Education", "Personal",
@@ -110,6 +119,10 @@ export function PromptDetailPane() {
   // Revert Version State
   const [isRevertingVersion, setIsRevertingVersion] = useState(false);
   const [versionToRevert, setVersionToRevert] = useState<IpcPromptVersion | null>(null);
+
+  const selectedModel = useMemo(() => {
+    return allModels.find(m => m.id === currentModelId);
+  }, [currentModelId, allModels]);
 
   // --- Data Fetching & Synchronization --- //
   useEffect(() => {
@@ -655,20 +668,27 @@ export function PromptDetailPane() {
           </div>
           <div className="space-y-2">
             <Label>Model</Label>
-            <Select value={currentModelId || allModels[0]?.id || ""} onValueChange={handleModelChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select model" />
-              </SelectTrigger>
-              <SelectContent>
-                {allModels
-                  .filter(m => m.isActive || m.id === currentModelId)
-                  .map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      {model.name} {model.isActive === false ? "(Inactive)" : ""}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <Select value={currentModelId || allModels[0]?.id || ""} onValueChange={handleModelChange}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Select model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allModels
+                    .filter(m => m.isActive || m.id === currentModelId)
+                    .map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.name} {model.isActive === false ? "(Inactive)" : ""}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {selectedModel && (
+                <span className="text-sm text-muted-foreground whitespace-nowrap">
+                  ({formatTokens(selectedModel.contextWindow)} tokens)
+                </span>
+              )}
+            </div>
           </div>
         </div>
 

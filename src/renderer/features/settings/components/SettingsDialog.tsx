@@ -35,7 +35,17 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [models, setModels] = useState<IpcModel[]>([]);
   const [newModelName, setNewModelName] = useState("");
+  const [newModelContextWindow, setNewModelContextWindow] = useState<number>(4096);
   const { theme, setTheme } = useTheme();
+
+  const formatTokens = (num: number): string => {
+    if (num >= 1_000_000) {
+      return (num / 1_000_000).toFixed(0) + "M";
+    } else if (num >= 1_000) {
+      return (num / 1_000).toFixed(0) + "K";
+    }
+    return num.toString();
+  };
 
   useEffect(() => {
     if (open && activeTab === 'models') {
@@ -58,12 +68,13 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         const newModel = await window.promptApi.addModel({
           name: newModelName.trim(),
           provider: 'Custom',
-          contextWindow: 4096,
+          contextWindow: newModelContextWindow,
           maxOutputTokens: 4096,
           isActive: true
         });
         setModels([...models, newModel]);
         setNewModelName("");
+        setNewModelContextWindow(4096);
       } catch (err) {
         console.error("Failed to add model:", err);
       }
@@ -182,13 +193,28 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 <Separator />
                 
                 <div className="space-y-4">
-                  <div className="flex gap-2">
-                    <Input 
-                      placeholder="Add new model name..." 
-                      value={newModelName}
-                      onChange={(e) => setNewModelName(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleAddModel()}
-                    />
+                  <div className="flex gap-2 items-end">
+                    <div className="grid gap-1.5 flex-1">
+                      <Label htmlFor="modelName">Name</Label>
+                      <Input 
+                        id="modelName"
+                        placeholder="Model name (e.g. GPT-4o)" 
+                        value={newModelName}
+                        onChange={(e) => setNewModelName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleAddModel()}
+                      />
+                    </div>
+                    <div className="grid gap-1.5 w-[140px]">
+                      <Label htmlFor="contextWindow">Context Window</Label>
+                      <Input 
+                        id="contextWindow"
+                        type="number"
+                        placeholder="Context" 
+                        value={newModelContextWindow}
+                        onChange={(e) => setNewModelContextWindow(Number(e.target.value))}
+                        onKeyDown={(e) => e.key === "Enter" && handleAddModel()}
+                      />
+                    </div>
                     <Button onClick={handleAddModel}>
                       <Plus className="mr-2 h-4 w-4" /> Add
                     </Button>
@@ -205,7 +231,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                         <div key={model.id} className={cn("flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors", !model.isActive && "text-muted-foreground italic")}>
                           <div className="flex flex-col">
                               <span className="text-sm font-medium">{model.name} {model.isActive === false && "(Inactive)"}</span>
-                              <span className="text-xs text-muted-foreground">{model.provider} • {model.contextWindow} tokens</span>
+                              <span className="text-xs text-muted-foreground">{model.provider} • {formatTokens(model.contextWindow)} tokens</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <Switch
