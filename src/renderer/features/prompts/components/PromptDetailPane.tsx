@@ -170,23 +170,23 @@ export function PromptDetailPane({
           setCurrentTopP(detail.currentTopP);
           setCurrentPromptTags(detail.tags);
           setVersions(detail.versions);
-          
+
           // Set active version to the latest MAJOR version initially
           const majorVersions = detail.versions.filter(v => v.isMajorVersion);
           const latestMajor = majorVersions.length > 0 ? majorVersions[majorVersions.length - 1] : null;
           // Fallback to any version if no major version exists (shouldn't happen with correct seed/logic)
           const fallback = detail.versions.length > 0 ? detail.versions[detail.versions.length - 1] : null;
-          
+
           setActiveVersionId(latestMajor ? latestMajor.id : (fallback ? fallback.id : null));
-          
+
           const targetVersionId = latestMajor ? latestMajor.id : (fallback ? fallback.id : null);
           if (targetVersionId) {
-             const versionSamples = detail.outputSamples.filter(s => s.versionId === targetVersionId);
-             setSamples(versionSamples);
-             setActiveSampleId(versionSamples.length > 0 ? versionSamples[0].id : null);
+            const versionSamples = detail.outputSamples.filter(s => s.versionId === targetVersionId);
+            setSamples(versionSamples);
+            setActiveSampleId(versionSamples.length > 0 ? versionSamples[0].id : null);
           } else {
-             setSamples([]);
-             setActiveSampleId(null);
+            setSamples([]);
+            setActiveSampleId(null);
           }
 
         } else {
@@ -248,13 +248,13 @@ export function PromptDetailPane({
       onUpdatePromptCurrentTokenLimit(promptDetail.id, selectedVersion.tokenLimit || undefined as any);
       onUpdatePromptCurrentTopK(promptDetail.id, selectedVersion.topK || undefined as any);
       onUpdatePromptCurrentTopP(promptDetail.id, selectedVersion.topP || undefined as any);
-      
+
       // 3. Update samples for the selected version
       const versionSamples = promptDetail.outputSamples.filter(s => s.versionId === selectedVersion.id);
       setSamples(versionSamples);
       setActiveSampleId(versionSamples.length > 0 ? versionSamples[0].id : null);
-    } 
-  }, [activeVersionId, promptDetail, versions]); 
+    }
+  }, [activeVersionId, promptDetail, versions]);
 
 
   // --- Handlers --- //
@@ -287,7 +287,7 @@ export function PromptDetailPane({
     const newVersion = await onCreatePromptVersion(
       promptDetail.id,
       `v${versions.filter(v => v.isMajorVersion).length + 1}`, // Count only major versions for naming
-      currentContent, 
+      currentContent,
       currentModelId,
       currentTemperature,
       currentTokenLimit,
@@ -318,14 +318,14 @@ export function PromptDetailPane({
       activeVersionId || undefined, // Copy samples from current version
       activeVersionId || undefined // Archive the current version
     );
-    
+
     setVersions(prev => {
-        // Mark old version as non-major in local state
-        const updated = prev.map(v => v.id === activeVersionId ? { ...v, isMajorVersion: false } : v);
-        // Add new version
-        return [...updated, newMajorVersion];
+      // Mark old version as non-major in local state
+      const updated = prev.map(v => v.id === activeVersionId ? { ...v, isMajorVersion: false } : v);
+      // Add new version
+      return [...updated, newMajorVersion];
     });
-    
+
     setActiveVersionId(newMajorVersion.id); // Switch to the new head
   };
 
@@ -344,7 +344,7 @@ export function PromptDetailPane({
     // TODO: Implement IPC
     const newVersions = versions.filter(v => v.id !== activeVersionId);
     setVersions(newVersions);
-    
+
     // Find next version to select (prefer major versions)
     const nextMajor = newVersions.filter(v => v.isMajorVersion);
     if (nextMajor.length > 0) {
@@ -517,7 +517,7 @@ export function PromptDetailPane({
             </Select>
           </div>
 
-          {/* Centered Version Management Group */} 
+          {/* Centered Version Management Group */}
           <div className="flex flex-1 justify-center items-center px-4">
             <div className="flex items-center gap-1 rounded-md bg-muted/50 p-1">
               <Tabs value={activeVersionId || ""} onValueChange={setActiveVersionId} className="h-8">
@@ -655,41 +655,41 @@ export function PromptDetailPane({
 
         {promptMode === 'api' && (
           <div className="grid grid-cols-4 gap-4">
-              <div className="space-y-2">
-                <Label>Temperature</Label>
-                <Input
-                  type="number"
-                  step="0.1"
-                  value={currentTemperature}
-                  onChange={handleTemperatureChange}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Token Limit</Label>
-                <Input
-                  type="number"
-                  value={currentTokenLimit}
-                  onChange={handleTokenLimitChange}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Top-K</Label>
-                <Input
-                  type="number"
-                  value={currentTopK || ""}
-                  onChange={handleTopKChange}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Top-P</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={currentTopP || ""}
-                  onChange={handleTopPChange}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>Temperature</Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={currentTemperature}
+                onChange={handleTemperatureChange}
+              />
             </div>
+            <div className="space-y-2">
+              <Label>Token Limit</Label>
+              <Input
+                type="number"
+                value={currentTokenLimit}
+                onChange={handleTokenLimitChange}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Top-K</Label>
+              <Input
+                type="number"
+                value={currentTopK || ""}
+                onChange={handleTopKChange}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Top-P</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={currentTopP || ""}
+                onChange={handleTopPChange}
+              />
+            </div>
+          </div>
         )}
 
         <Separator />
@@ -801,10 +801,10 @@ export function PromptDetailPane({
           </div>
         </div>
       </div>
-      <PromptHistorySidebar 
-        open={isHistoryOpen} 
-        onOpenChange={setIsHistoryOpen} 
-        versions={versions} // Pass versions to history
+      <PromptHistorySidebar
+        open={isHistoryOpen}
+        onOpenChange={setIsHistoryOpen}
+        versions={activeVersion ? versions.filter(v => v.label === activeVersion.label) : []} // Filter history by current active version label
       />
 
       {/* Rename Version Dialog */}

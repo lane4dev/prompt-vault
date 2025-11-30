@@ -85,8 +85,8 @@ export function registerPromptIpcHandlers() {
       currentTokenLimit: prompt.currentTokenLimit || undefined,
       currentTopK: prompt.currentTopK || undefined,
       currentTopP: prompt.currentTopP || undefined,
-      isFavorite: prompt.isFavorite,
-      isArchived: prompt.isArchived,
+      isFavorite: prompt.isFavorite || false,
+      isArchived: prompt.isArchived || false,
       tags,
       versions,
       outputSamples: allOutputSamples,
@@ -101,7 +101,7 @@ export function registerPromptIpcHandlers() {
       id: newPromptId,
       name,
       description,
-      currentContent: '' || `You are a helpful assistant.`, 
+      currentContent: `You are a helpful assistant.`, 
       currentModelId: modelId || 'gpt-4o', 
       currentTemperature: 0.7,
       currentTokenLimit: 2000,
@@ -115,7 +115,7 @@ export function registerPromptIpcHandlers() {
       let tag = await db.query.tags.findFirst({ where: eq(schema.tags.name, tagName) });
       if (!tag) {
         const [newTagId] = await db.insert(schema.tags).values({ name: tagName }).returning({ id: schema.tags.id });
-        tag = { id: newTagId.id, name: tagName };
+        tag = { id: newTagId.id, name: tagName, color: null };
       }
       if (tag) {
         tagsToAssociate.push({ promptId: newPromptId, tagId: tag.id });
@@ -131,7 +131,7 @@ export function registerPromptIpcHandlers() {
       promptId: newPromptId,
       versionNumber: 1,
       label: 'v1',
-      content: '' || `You are a helpful assistant.`,
+      content: `You are a helpful assistant.`,
       modelId: modelId || 'gpt-4o',
       temperature: 0.7,
       tokenLimit: 2000,
@@ -175,7 +175,7 @@ export function registerPromptIpcHandlers() {
       let tag = await db.query.tags.findFirst({ where: eq(schema.tags.name, tagName) });
       if (!tag) {
         const [newTagId] = await db.insert(schema.tags).values({ name: tagName }).returning({ id: schema.tags.id });
-        tag = { id: newTagId.id, name: tagName };
+        tag = { id: newTagId.id, name: tagName, color: null };
       }
       if (tag) {
         tagsToAssociate.push({ promptId: id, tagId: tag.id });
@@ -305,7 +305,7 @@ export function registerPromptIpcHandlers() {
       provider: m.provider,
       contextWindow: m.contextWindow,
       maxOutputTokens: m.maxOutputTokens || undefined,
-      isActive: m.isActive,
+      isActive: m.isActive || false,
     }));
   });
 

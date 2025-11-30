@@ -81,8 +81,8 @@ export interface IpcModel {
   name: string;
   provider: string;
   contextWindow: number;
-  maxOutputTokens?: number;
-  isActive: boolean;
+  maxOutputTokens?: number | null;
+  isActive?: boolean | null;
 }
 
 export interface IpcTag {
