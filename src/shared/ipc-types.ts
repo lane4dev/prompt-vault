@@ -9,6 +9,7 @@ export const IpcChannels = {
   DELETE_PROMPT: 'prompt:delete',
   UPDATE_PROMPT_TAGS: 'prompt:update-tags',
   CREATE_PROMPT_VERSION: 'prompt:create-version',
+  DELETE_PROMPT_VERSION: 'prompt:delete-version',
   // Models
   GET_ALL_MODELS: 'model:get-all',
   ADD_MODEL: 'model:add',
@@ -140,6 +141,8 @@ export interface PromptApi {
     copySamplesFromVersionId?: string,
     archivePreviousVersionId?: string,
   ): Promise<IpcPromptVersion>;
+
+  deletePromptVersion(id: string): Promise<void>;
 
   createOutputSample(
     versionId: string,

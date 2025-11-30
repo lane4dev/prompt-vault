@@ -25,6 +25,7 @@ interface PromptState {
   updatePrompt: (id: string, payload: UpdatePromptPayload) => Promise<void>;
 
   createPromptVersion: (payload: CreateVersionPayload) => Promise<IpcPromptVersion>;
+  deletePromptVersion: (id: string, promptId: string) => Promise<void>;
 
   createOutputSample: (payload: CreateOutputSamplePayload) => Promise<IpcOutputSample>;
 
@@ -178,6 +179,18 @@ export const usePromptStore = create<PromptState>((set, get) => ({
       console.error("Failed to create prompt version:", err);
       set({ error: "Failed to create prompt version" });
       throw err;
+    }
+  },
+
+  deletePromptVersion: async (id, promptId) => {
+    try {
+      await PromptService.deleteVersion(id);
+      
+      // Refetch details to update the version list
+      get().fetchPromptDetail(promptId);
+    } catch (err) {
+      console.error("Failed to delete prompt version:", err);
+      set({ error: "Failed to delete prompt version" });
     }
   },
 

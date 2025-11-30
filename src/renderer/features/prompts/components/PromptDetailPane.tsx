@@ -86,6 +86,7 @@ export function PromptDetailPane() {
     models: allModels,
     updatePrompt,
     createPromptVersion,
+    deletePromptVersion,
     createOutputSample,
     fetchModels,
   } = usePromptStore();
@@ -261,27 +262,30 @@ export function PromptDetailPane() {
   const isModified = useMemo(() => {
     if (!promptDetail) return false;
 
-    // Find the latest major version (the "baseline" for saving a new version)
-    const majorVersions = versions.filter(v => v.isMajorVersion);
-    const latestMajor = majorVersions.length > 0 ? majorVersions[majorVersions.length - 1] : null;
+    // Use the currently active version as the baseline for comparison
+    const activeVersion = versions.find(v => v.id === activeVersionId);
+    
+    // If no active version is selected (rare), fallback to the latest major version
+    const baselineVersion = activeVersion || versions.filter(v => v.isMajorVersion).pop();
 
-    if (!latestMajor) {
-      // If no major version exists, allow save if there's content
+    if (!baselineVersion) {
+      // If no versions exist at all, allow save if there's content
       return !!currentContent.trim();
     }
 
     // Comparison Logic
-    const contentChanged = currentContent !== latestMajor.content;
-    const modelChanged = currentModelId !== (latestMajor.modelId || "");
-    const tempChanged = currentTemperature !== (latestMajor.temperature || 0.7);
-    const tokenLimitChanged = currentTokenLimit !== latestMajor.tokenLimit;
-    const topKChanged = currentTopK !== latestMajor.topK;
-    const topPChanged = currentTopP !== latestMajor.topP;
+    const contentChanged = currentContent !== baselineVersion.content;
+    const modelChanged = currentModelId !== (baselineVersion.modelId || "");
+    const tempChanged = currentTemperature !== (baselineVersion.temperature || 0.7);
+    const tokenLimitChanged = currentTokenLimit !== baselineVersion.tokenLimit;
+    const topKChanged = currentTopK !== baselineVersion.topK;
+    const topPChanged = currentTopP !== baselineVersion.topP;
 
     return contentChanged || modelChanged || tempChanged || tokenLimitChanged || topKChanged || topPChanged;
   }, [
     promptDetail,
     versions,
+    activeVersionId,
     currentContent,
     currentModelId,
     currentTemperature,
@@ -320,7 +324,7 @@ export function PromptDetailPane() {
     try {
       const newVersion = await createPromptVersion({
         promptId: promptDetail.id,
-        label: `v${versions.filter(v => v.isMajorVersion).length + 1}`,
+        label: "", // Let backend generate label based on version number
         content: currentContent,
         modelId: currentModelId,
         temperature: currentTemperature,
@@ -370,21 +374,43 @@ export function PromptDetailPane() {
     }
   };
 
-  const handleDeleteVersion = () => {
-    // TODO: Implement IPC
-    const newVersions = versions.filter(v => v.id !== activeVersionId);
-    setVersions(newVersions);
+  const handleDeleteVersion = async () => {
+    if (!activeVersionId || !promptDetail) return;
 
-    const nextMajor = newVersions.filter(v => v.isMajorVersion);
-    if (nextMajor.length > 0) {
-      setActiveVersionId(nextMajor[nextMajor.length - 1].id);
-    } else if (newVersions.length > 0) {
-      setActiveVersionId(newVersions[newVersions.length - 1].id);
-    } else {
-      if (promptDetail) {
-        // const newVersionId = uuidv4();
+    try {
+      // 1. Determine the next version to switch to
+      const newVersions = versions.filter(v => v.id !== activeVersionId);
+      const nextMajor = newVersions.filter(v => v.isMajorVersion);
+      let nextVersion = null;
+      
+      if (nextMajor.length > 0) {
+        nextVersion = nextMajor[nextMajor.length - 1];
+      } else if (newVersions.length > 0) {
+        nextVersion = newVersions[newVersions.length - 1];
       }
+
+      // 2. Delete the version
+      await deletePromptVersion(activeVersionId, promptDetail.id);
+
+      // 3. If there is a next version, sync the draft (prompts table) to it immediately
+      if (nextVersion) {
+         await updatePrompt(promptDetail.id, {
+            currentContent: nextVersion.content,
+            currentModelId: nextVersion.modelId || "",
+            currentTemperature: nextVersion.temperature || 0.7,
+            currentTokenLimit: nextVersion.tokenLimit || undefined,
+            currentTopK: nextVersion.topK || undefined,
+            currentTopP: nextVersion.topP || undefined
+         });
+         setActiveVersionId(nextVersion.id);
+      } else {
+         setActiveVersionId(null);
+      }
+
+    } catch (error) {
+      console.error("Failed to delete version", error);
     }
+    
     setIsDeletingVersion(false);
   };
 
@@ -935,7 +961,7 @@ export function PromptDetailPane() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteVersion} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleDeleteVersion} variant="destructive">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

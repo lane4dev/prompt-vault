@@ -3,7 +3,7 @@ import { db } from '../db';
 import { IpcChannels, IpcPromptListItem, IpcPromptDetail, IpcPromptVersion, IpcOutputSample, IpcModel, IpcTag, PromptApi } from '../../shared/ipc-types';
 import * as schema from '../../shared/db/schema';
 import { v4 as uuidv4 } from 'uuid';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, and } from 'drizzle-orm';
 
 export function registerPromptIpcHandlers() {
 
@@ -296,6 +296,27 @@ export function registerPromptIpcHandlers() {
       createdAt: createdVersion.createdAt.getTime(),
       note: createdVersion.note || undefined,
     };
+  });
+
+  ipcMain.handle(IpcChannels.DELETE_PROMPT_VERSION, async (_event: IpcMainInvokeEvent, id: string): Promise<void> => {
+    const versionToDelete = await db.query.promptVersions.findFirst({
+      where: eq(schema.promptVersions.id, id),
+    });
+
+    if (!versionToDelete) return;
+
+    // Delete all versions (snapshots and major) that share the same label for this prompt
+    if (versionToDelete.label) {
+      await db.delete(schema.promptVersions).where(
+        and(
+          eq(schema.promptVersions.promptId, versionToDelete.promptId),
+          eq(schema.promptVersions.label, versionToDelete.label)
+        )
+      );
+    } else {
+      // Fallback if no label, just delete the ID
+      await db.delete(schema.promptVersions).where(eq(schema.promptVersions.id, id));
+    }
   });
 
   ipcMain.handle(IpcChannels.CREATE_OUTPUT_SAMPLE, async (_event: IpcMainInvokeEvent, versionId: string, name: string, content: string): Promise<IpcOutputSample> => {

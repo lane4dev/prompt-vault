@@ -26,6 +26,8 @@ const promptApi: PromptApi = {
   createPromptVersion: (promptId, label, content, modelId, temperature, tokenLimit, topK, topP, note, isMajorVersion, copySamplesFromVersionId, archivePreviousVersionId) => 
     ipcRenderer.invoke(IpcChannels.CREATE_PROMPT_VERSION, promptId, label, content, modelId, temperature, tokenLimit, topK, topP, note, isMajorVersion, copySamplesFromVersionId, archivePreviousVersionId),
 
+  deletePromptVersion: (id) => ipcRenderer.invoke(IpcChannels.DELETE_PROMPT_VERSION, id),
+
   createOutputSample: (versionId, name, content) => 
     ipcRenderer.invoke(IpcChannels.CREATE_OUTPUT_SAMPLE, versionId, name, content),
 
