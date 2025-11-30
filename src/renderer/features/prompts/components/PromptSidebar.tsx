@@ -374,7 +374,7 @@ export function PromptSidebar({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeletePromptConfirmed} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleDeletePromptConfirmed} variant="destructive">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
