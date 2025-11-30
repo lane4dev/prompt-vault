@@ -7,7 +7,7 @@ import { Separator } from "renderer/components/ui/separator";
 import { Label } from "renderer/components/ui/label";
 import { Textarea } from "renderer/components/ui/textarea";
 import { Search, Plus, Filter, Folder, Hash, Settings, MoreHorizontal, Trash2, ChevronDown } from "lucide-react";
-import { cn } from "renderer/lib/utils";
+import { cn, formatRelativeTime } from "renderer/lib/utils";
 import { SettingsDialog } from "renderer/features/settings/components/SettingsDialog";
 import {
   DropdownMenu,
@@ -81,6 +81,9 @@ export function PromptSidebar({
   const [promptToDelete, setPromptToDelete] = useState<string | null>(null);
   const [allModels, setAllModels] = useState<IpcModel[]>([]);
 
+  // Sort prompts by lastModified descending
+  const sortedPrompts = [...prompts].sort((a, b) => b.lastModified - a.lastModified);
+
   useEffect(() => {
     const fetchModels = async () => {
       try {
@@ -146,7 +149,7 @@ export function PromptSidebar({
       {/* Prompt List */}
       <ScrollArea className="flex-1">
         <div className="flex flex-col gap-2 p-4 pt-2">
-          {prompts.map((prompt) => (
+          {sortedPrompts.map((prompt) => (
             <div
               key={prompt.id}
               className={cn(
@@ -158,7 +161,7 @@ export function PromptSidebar({
               <div className="flex w-full flex-col gap-1">
                 <div className="flex items-center justify-between">
                   <div className="font-semibold">{prompt.name}</div>
-                  <div className="text-xs text-muted-foreground">{new Date(prompt.lastModified).toLocaleString()}</div>
+                  <div className="text-xs text-muted-foreground">{formatRelativeTime(prompt.lastModified)}</div>
                 </div>
                 <div className="line-clamp-2 text-xs text-muted-foreground mt-1">
                   {prompt.description}
