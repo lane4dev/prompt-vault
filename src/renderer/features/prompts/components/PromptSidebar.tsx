@@ -80,9 +80,16 @@ export function PromptSidebar({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [promptToDelete, setPromptToDelete] = useState<string | null>(null);
   const [allModels, setAllModels] = useState<IpcModel[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Sort prompts by lastModified descending
-  const sortedPrompts = [...prompts].sort((a, b) => b.lastModified - a.lastModified);
+  // Filter prompts based on search query
+  const filteredPrompts = prompts.filter(prompt =>
+    prompt.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    prompt.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Sort filtered prompts by lastModified descending
+  const sortedPrompts = [...filteredPrompts].sort((a, b) => b.lastModified - a.lastModified);
 
   useEffect(() => {
     const fetchModels = async () => {
@@ -142,7 +149,12 @@ export function PromptSidebar({
         </div>
         <div className="relative">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search prompts..." className="pl-8" />
+          <Input
+            placeholder="Search prompts..."
+            className="pl-8"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
       </div>
 
