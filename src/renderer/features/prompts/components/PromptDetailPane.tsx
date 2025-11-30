@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "renderer/components/ui/select";
-import { Save, Copy, Clock, Pencil, Check, X, Plus, Trash2, Eye, Edit3, MoreHorizontal, ChevronDown } from "lucide-react";
+import { Save, Copy, Clock, Pencil, Check, X, Plus, Trash2, Eye, Edit3, MoreHorizontal, ChevronDown, AlertTriangle } from "lucide-react";
 import { cn } from "renderer/lib/utils";
 import {
   DropdownMenu,
@@ -69,6 +69,10 @@ const formatTokens = (num: number): string => {
   return num.toString();
 };
 
+const estimateTokenCount = (text: string): number => {
+  return text.length;
+};
+
 const AVAILABLE_TAGS = [
   "Writing", "Productivity", "Coding", "Development", "Business", "Marketing",
   "Data Analysis", "Design", "Research", "Education", "Personal",
@@ -123,6 +127,31 @@ export function PromptDetailPane() {
   const selectedModel = useMemo(() => {
     return allModels.find(m => m.id === currentModelId);
   }, [currentModelId, allModels]);
+
+  const currentPromptTokens = useMemo(() => estimateTokenCount(currentContent), [currentContent]);
+  const modelContextWindow = selectedModel?.contextWindow || 0;
+
+  const { isTokenLimitExceedingContext, isPromptExceedingTokenLimit, isPromptExceedingContext } = useMemo(() => {
+    let isTokenLimitExceedingContext = false;
+    let isPromptExceedingTokenLimit = false;
+    let isPromptExceedingContext = false;
+
+    if (promptMode === 'api') {
+      if (currentTokenLimit && modelContextWindow > 0 && currentTokenLimit > modelContextWindow) {
+        isTokenLimitExceedingContext = true;
+      }
+      if (currentTokenLimit && currentPromptTokens > currentTokenLimit) {
+        isPromptExceedingTokenLimit = true;
+      }
+    } else {
+      // Chat mode
+      if (modelContextWindow > 0 && currentPromptTokens > modelContextWindow) {
+        isPromptExceedingContext = true;
+      }
+    }
+
+    return { isTokenLimitExceedingContext, isPromptExceedingTokenLimit, isPromptExceedingContext };
+  }, [promptMode, currentTokenLimit, modelContextWindow, currentPromptTokens]);
 
   // --- Data Fetching & Synchronization --- //
   useEffect(() => {
@@ -704,11 +733,19 @@ export function PromptDetailPane() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Token Limit</Label>
+              <Label className="flex items-center gap-1">
+                Token Limit
+                {isTokenLimitExceedingContext && (
+                   <span className="text-destructive" title="Token limit exceeds model context window">
+                     <AlertTriangle className="h-3 w-3" />
+                   </span>
+                )}
+              </Label>
               <Input
                 type="number"
                 value={currentTokenLimit}
                 onChange={handleTokenLimitChange}
+                className={cn(isTokenLimitExceedingContext && "border-yellow-500 focus-visible:ring-yellow-500")}
               />
             </div>
             <div className="space-y-2">
@@ -735,15 +772,20 @@ export function PromptDetailPane() {
         {/* Editor Area */}
         <div className="grid grid-cols-2 gap-6 h-[500px]">
           {/* Prompt Editor */}
-          <div className="flex flex-col gap-2 h-full border rounded-md p-2 bg-muted/10">
+          <div className={cn("flex flex-col gap-2 h-full border rounded-md p-2 bg-muted/10 transition-colors", (isPromptExceedingTokenLimit || isPromptExceedingContext) && "border-yellow-500 bg-yellow-500/5")}>
             <div className="flex items-center justify-between">
               <Label className="text-base font-semibold">Prompt</Label>
-              <Button variant="ghost" size="icon" className="h-6 w-6">
-                <Copy className="h-3 w-3" />
-              </Button>
+              <div className="flex items-center gap-2">
+                 <span className={cn("text-xs text-muted-foreground font-mono", (isPromptExceedingTokenLimit || isPromptExceedingContext) && "text-destructive font-bold")}>
+                    {formatTokens(currentPromptTokens)} / {formatTokens(promptMode === 'api' ? (currentTokenLimit || 0) : modelContextWindow)} Tokens
+                 </span>
+                <Button variant="ghost" size="icon" className="h-6 w-6">
+                  <Copy className="h-3 w-3" />
+                </Button>
+              </div>
             </div>
             <Textarea
-              className="flex-1 font-mono text-sm resize-none"
+              className={cn("flex-1 font-mono text-sm resize-none focus-visible:ring-0 bg-transparent border-none p-0 shadow-none")}
               placeholder="Enter your system prompt here..."
               value={currentContent}
               onChange={(e) => handlePromptContentChange(e.target.value)}
