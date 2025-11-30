@@ -19,6 +19,7 @@ export const IpcChannels = {
   ADD_TAG: 'tag:add',
   // Other
   APP_GET_PATH: 'app:get-path',
+  COPY_TO_CLIPBOARD: 'app:copy-to-clipboard',
   // Output Samples
   CREATE_OUTPUT_SAMPLE: 'output-sample:create',
 } as const; // `as const` ensures string literal types
@@ -144,6 +145,8 @@ export interface PromptApi {
     name: string,
     content: string,
   ): Promise<IpcOutputSample>;
+
+  copyToClipboard(text: string): Promise<void>;
 
   // For renderer to use main process utilities
   getAppPath(name: 'home' | 'appData' | 'userData' | 'temp' | 'exe' | 'module' | 'desktop' | 'documents' | 'downloads' | 'music' | 'pictures' | 'videos' | 'recent' | 'logs' | 'crashDumps'): Promise<string>;

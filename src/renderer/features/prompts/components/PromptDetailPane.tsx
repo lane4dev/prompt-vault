@@ -124,6 +124,15 @@ export function PromptDetailPane() {
   const [isRevertingVersion, setIsRevertingVersion] = useState(false);
   const [versionToRevert, setVersionToRevert] = useState<IpcPromptVersion | null>(null);
 
+  const [isCopied, setIsCopied] = useState(false);
+
+  const handleCopyToClipboard = async () => {
+    if (!currentContent) return;
+    await window.promptApi.copyToClipboard(currentContent);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
+
   const selectedModel = useMemo(() => {
     return allModels.find(m => m.id === currentModelId);
   }, [currentModelId, allModels]);
@@ -779,8 +788,8 @@ export function PromptDetailPane() {
                  <span className={cn("text-xs text-muted-foreground font-mono", (isPromptExceedingTokenLimit || isPromptExceedingContext) && "text-destructive font-bold")}>
                     {formatTokens(currentPromptTokens)} / {formatTokens(promptMode === 'api' ? (currentTokenLimit || 0) : modelContextWindow)} Tokens
                  </span>
-                <Button variant="ghost" size="icon" className="h-6 w-6">
-                  <Copy className="h-3 w-3" />
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopyToClipboard}>
+                  {isCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                 </Button>
               </div>
             </div>

@@ -29,7 +29,10 @@ const promptApi: PromptApi = {
   createOutputSample: (versionId, name, content) => 
     ipcRenderer.invoke(IpcChannels.CREATE_OUTPUT_SAMPLE, versionId, name, content),
 
+  copyToClipboard: (text) => ipcRenderer.invoke(IpcChannels.COPY_TO_CLIPBOARD, text),
+
   getAppPath: (name) => ipcRenderer.invoke(IpcChannels.APP_GET_PATH, name),
+  getAppVersion: () => ipcRenderer.invoke(IpcChannels.GET_APP_VERSION),
 }
 
 // Expose the API to the renderer process

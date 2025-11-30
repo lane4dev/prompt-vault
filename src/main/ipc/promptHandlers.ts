@@ -1,4 +1,4 @@
-import { ipcMain, IpcMainInvokeEvent, app } from 'electron';
+import { ipcMain, IpcMainInvokeEvent, app, clipboard } from 'electron';
 import { db } from '../db';
 import { IpcChannels, IpcPromptListItem, IpcPromptDetail, IpcPromptVersion, IpcOutputSample, IpcModel, IpcTag, PromptApi } from '../../shared/ipc-types';
 import * as schema from '../../shared/db/schema';
@@ -8,6 +8,10 @@ import { eq, sql } from 'drizzle-orm';
 export function registerPromptIpcHandlers() {
 
   // --- Prompt Handlers ---
+
+  ipcMain.handle(IpcChannels.COPY_TO_CLIPBOARD, async (_event: IpcMainInvokeEvent, text: string) => {
+    clipboard.writeText(text);
+  });
 
   ipcMain.handle(IpcChannels.GET_ALL_PROMPTS, async (): Promise<IpcPromptListItem[]> => {
     const prompts = await db.query.prompts.findMany({
@@ -382,5 +386,9 @@ export function registerPromptIpcHandlers() {
 
   ipcMain.handle(IpcChannels.APP_GET_PATH, async (_event: IpcMainInvokeEvent, name: Parameters<PromptApi['getAppPath']>[0]): Promise<string> => {
     return app.getPath(name);
+  });
+
+  ipcMain.handle(IpcChannels.GET_APP_VERSION, async (): Promise<string> => {
+    return app.getVersion();
   });
 }
