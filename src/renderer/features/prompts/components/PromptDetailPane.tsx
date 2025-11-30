@@ -577,7 +577,7 @@ export function PromptDetailPane({
               value={promptMode}
               onValueChange={(v) => setPromptMode(v as 'api' | 'chat')}
             >
-              <SelectTrigger className="w-[110px] h-8">
+              <SelectTrigger className="w-[110px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -591,7 +591,7 @@ export function PromptDetailPane({
           <div className="flex flex-1 justify-center items-center px-4">
             <div className="flex items-center gap-1 rounded-md bg-muted/50 p-1">
               <Tabs value={activeVersionId || ""} onValueChange={setActiveVersionId} className="h-8">
-                <TabsList className="h-7">
+                <TabsList>
                   {versions.filter(v => v.isMajorVersion).map((version) => (
                     <TabsTrigger key={version.id} value={version.id}>
                       {version.label}
@@ -633,11 +633,11 @@ export function PromptDetailPane({
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setIsHistoryOpen(true)}>
+            <Button variant="outline" onClick={() => setIsHistoryOpen(true)}>
               <Clock className="w-4 h-4 mr-2" />
               History
             </Button>
-            <Button size="sm" onClick={handleSaveVersion}>
+            <Button onClick={handleSaveVersion} disabled={!isModified}>
               <Save className="w-4 h-4 mr-2" />
               Save
             </Button>
@@ -645,7 +645,7 @@ export function PromptDetailPane({
         </div>
 
         {/* Tags Display */}
-        <div className="flex items-center gap-2 mt-2">
+        <div className="flex items-center gap-2">
           <ScrollArea className="w-full whitespace-nowrap">
             <div className="flex w-max space-x-2 p-1">
               {promptDetail.tags.map((tag) => (
@@ -659,7 +659,7 @@ export function PromptDetailPane({
 
           <Popover open={isTagsPopoverOpen} onOpenChange={setIsTagsPopoverOpen}>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 ml-auto shrink-0">
+              <Button variant="outline" className="ml-auto shrink-0">
                 <Plus className="mr-2 h-4 w-4" />
                 Edit Tags
               </Button>
