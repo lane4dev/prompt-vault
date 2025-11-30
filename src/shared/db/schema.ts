@@ -16,7 +16,7 @@ export const prompts = sqliteTable('prompts', {
   id: text('id').primaryKey(), // UUID
   name: text('name').notNull(),
   description: text('description'), // Goal
-  
+
   // Draft State (Current Workspace)
   currentContent: text('current_content').default(''),
   currentModelId: text('current_model_id').references(() => models.id),
@@ -25,11 +25,14 @@ export const prompts = sqliteTable('prompts', {
   currentTopK: integer('current_top_k'),
   currentTopP: real('current_top_p'),
 
-  isFavorite: integer('is_favorite', { mode: 'boolean' }).default(false),
-  isArchived: integer('is_archived', { mode: 'boolean' }).default(false),
-  
+  isFavorite: integer('is_favorite', { mode: 'boolean' }).default(false).notNull(),
+
+  isArchived: integer('is_archived', { mode: 'boolean' }).default(false).notNull(),
+
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
+
 });
 
 // --- Prompt Versions Table (History Snapshots) ---
@@ -38,7 +41,7 @@ export const promptVersions = sqliteTable('prompt_versions', {
   promptId: text('prompt_id').notNull().references(() => prompts.id, { onDelete: 'cascade' }),
   versionNumber: integer('version_number').notNull(),
   label: text('label'), // e.g., "v1", "Release 1.0"
-  
+
   // Snapshot Data
   content: text('content').notNull(),
   modelId: text('model_id').references(() => models.id),
@@ -46,7 +49,7 @@ export const promptVersions = sqliteTable('prompt_versions', {
   tokenLimit: integer('token_limit'),
   topK: integer('top_k'),
   topP: real('top_p'),
-  
+
   isMajorVersion: integer('is_major_version', { mode: 'boolean' }).default(true).notNull(),
   note: text('note'), // Optional commit message
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),

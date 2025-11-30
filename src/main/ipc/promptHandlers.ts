@@ -85,8 +85,8 @@ export function registerPromptIpcHandlers() {
       currentTokenLimit: prompt.currentTokenLimit || undefined,
       currentTopK: prompt.currentTopK || undefined,
       currentTopP: prompt.currentTopP || undefined,
-      isFavorite: prompt.isFavorite || false,
-      isArchived: prompt.isArchived || false,
+      isFavorite: prompt.isFavorite,
+      isArchived: prompt.isArchived,
       tags,
       versions,
       outputSamples: allOutputSamples,
@@ -164,7 +164,24 @@ export function registerPromptIpcHandlers() {
   });
 
   ipcMain.handle(IpcChannels.UPDATE_PROMPT, async (_event: IpcMainInvokeEvent, id: string, updates: Parameters<PromptApi['updatePrompt']>[1]): Promise<void> => {
-    await db.update(schema.prompts).set({ ...updates, updatedAt: new Date() }).where(eq(schema.prompts.id, id));
+    const metadataKeys = ['name', 'description', 'isFavorite', 'isArchived'];
+    const hasMetadataUpdate = Object.keys(updates).some(key => metadataKeys.includes(key));
+    
+    // Convert undefined to null for Drizzle to set fields to NULL
+    const updateData: Record<string, any> = { ...updates };
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        updateData[key] = null;
+      }
+    });
+
+    if (hasMetadataUpdate) {
+        updateData.updatedAt = new Date();
+    }
+
+    if (Object.keys(updateData).length === 0) return;
+
+    await db.update(schema.prompts).set(updateData).where(eq(schema.prompts.id, id));
   });
 
   ipcMain.handle(IpcChannels.UPDATE_PROMPT_TAGS, async (_event: IpcMainInvokeEvent, id: string, newTagNames: string[]): Promise<void> => {
@@ -253,6 +270,11 @@ export function registerPromptIpcHandlers() {
       }
     }
 
+    // Update parent prompt's updatedAt, as a new version (save) is a major modification
+    await db.update(schema.prompts)
+      .set({ updatedAt: now })
+      .where(eq(schema.prompts.id, promptId));
+
     const createdVersion = await db.query.promptVersions.findFirst({ where: eq(schema.promptVersions.id, newVersionId) });
     if (!createdVersion) throw new Error('Failed to create prompt version.');
 
@@ -305,7 +327,7 @@ export function registerPromptIpcHandlers() {
       provider: m.provider,
       contextWindow: m.contextWindow,
       maxOutputTokens: m.maxOutputTokens || undefined,
-      isActive: m.isActive || false,
+      isActive: m.isActive,
     }));
   });
 
@@ -324,6 +346,23 @@ export function registerPromptIpcHandlers() {
     if (!createdModel) throw new Error('Failed to create model.');
 
     return createdModel;
+  });
+
+  ipcMain.handle(IpcChannels.TOGGLE_MODEL_ACTIVE, async (_event: IpcMainInvokeEvent, id: string, isActive: boolean): Promise<void> => {
+    await db.update(schema.models).set({ isActive }).where(eq(schema.models.id, id));
+  });
+
+  ipcMain.handle(IpcChannels.DELETE_MODEL, async (_event: IpcMainInvokeEvent, id: string): Promise<{ success: boolean; wasReferenced: boolean }> => {
+    try {
+      await db.delete(schema.models).where(eq(schema.models.id, id));
+      return { success: true, wasReferenced: false };
+    } catch (error: any) {
+      if (error.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
+        await db.update(schema.models).set({ isActive: false }).where(eq(schema.models.id, id));
+        return { success: true, wasReferenced: true };
+      }
+      throw error;
+    }
   });
 
   ipcMain.handle(IpcChannels.GET_ALL_TAGS, async (): Promise<IpcTag[]> => {
