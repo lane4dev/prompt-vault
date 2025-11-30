@@ -257,13 +257,20 @@ src
 > - “在现有 Prompt 界面上增加版本管理：版本标签 + 新建版本按钮，并用内存 store 模拟数据。”
 > - “实现本地 JSON 存储，启动时从 JSON 加载 Prompt 列表，关闭前自动保存。”
 >
-> 你只需要根据我给的具体任务，在上面的规则下工作即可。
+> - “把现有模板中的主页面替换为 Prompt 管理主界面（左侧列表 + 右侧详情），先只做静态 UI，不接入真实数据。”
+- “在现有 Prompt 界面上增加版本管理：版本标签 + 新建版本按钮，并用内存 store 模拟数据。”
+- “实现本地 JSON 存储，启动时从 JSON 加载 Prompt 列表，关闭前自动保存。”
+- “修复 PromptSidebar 和 PromptDetailPane 之间的 UI 对齐问题。”
+- “实现实际的 AI API 集成（目前是模拟/占位符参数）。”
+- “添加数据导出/导入功能。”
+
+你只需要根据我给的具体任务，在上面的规则下工作即可。
 
 ---
 
 # 项目进度日志（Project Status Log）
 
-## 2024-05-xx (Initial Development)
+## 2025-11-29 (Initial Development)
 - **UI 框架搭建**:
   - 创建了 `PromptManagerScreen` 作为主容器，采用左右分栏布局（Sidebar + DetailPane）。
   - 集成了 `shadcn/ui` 的基础组件（Button, Input, Resizable, etc.）。
@@ -284,9 +291,33 @@ src
   - 状态提升（Lifted State）：`prompts` 和 `selectedPromptId` 状态管理在 `PromptManagerScreen`。
   - 通过 Props (`onUpdatePromptTags` 等) 将子组件变更传递回顶层。
 
+## 2025-11-30 (近期开发)
+- **数据管理与持久化**:
+  - 实现了基本的 CRUD 操作和 Drizzle 数据库 Schema 定义。
+  - 优化了 `UPDATE_PROMPT` 的 Drizzle 类型处理，并修正了默认内容逻辑。
+- **版本控制与保存机制**:
+  - 实现了版本管理功能（'Draft' vs 'Snapshot'）。
+  - 改进了 'Save' 逻辑，通过归档当前主要版本并创建新版本来避免重复的 Tab 条目。
+  - 实现了 'Save' 按钮在无实质性内容或参数更改时自动禁用。
+  - 实现了版本回溯功能，允许用户从历史记录中恢复到任意版本。
+- **侧边栏排序与时间戳**:
+  - 通过精细控制 `lastModified` 字段的更新（仅在元数据修改或主要版本保存时更新），确保侧边栏排序的稳定性。
+- **模型管理**:
+  - 在设置中实现了完整的模型管理系统（添加、激活/停用、删除）。
+  - '删除模型' 功能实现了软删除，以维护数据完整性。
+  - Prompt 详情中的模型选择下拉菜单现在只显示活跃模型，但会保留显示非活跃的当前选中模型。
+- **主题与设置**:
+  - 实现了全局主题选择功能（亮色、暗色、系统）。
+  - 改进了设置对话框的尺寸和响应性。
+  - 重新设计了模型管理 UI。
+- **UI 优化**:
+  - 修复了 `PromptSidebar` 和 `PromptDetailPane` 之间的 UI 分隔线对齐问题。
+  - 修复了 `PromptDetailPane.tsx` 中 `AlertDialogTitle` 和 `DialogTitle` 的 JSX 语法错误。
+
 **Next Steps**:
-- 接入本地持久化存储（Electron Main Process + JSON/SQLite）。
-- 实现完整的版本内容（Prompt Content / Output Samples）与主状态的同步。
+- 实现实际的 AI API 集成（目前是模拟/占位符参数）。
+- 添加数据导出/导入功能。
 - 优化 Markdown 编辑体验。
+- 完善 UI 样式和过渡效果。
 
 在你开始前，请先根据仓库结构和上述信息，输出你的 `## Plan`，然后等待我确认。
