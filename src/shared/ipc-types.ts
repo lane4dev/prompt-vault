@@ -20,6 +20,7 @@ export const IpcChannels = {
   // Other
   APP_GET_PATH: 'app:get-path',
   COPY_TO_CLIPBOARD: 'app:copy-to-clipboard',
+  GET_APP_VERSION: 'app:get-version',
   // Output Samples
   CREATE_OUTPUT_SAMPLE: 'output-sample:create',
 } as const; // `as const` ensures string literal types
@@ -150,8 +151,8 @@ export interface PromptApi {
 
   // For renderer to use main process utilities
   getAppPath(name: 'home' | 'appData' | 'userData' | 'temp' | 'exe' | 'module' | 'desktop' | 'documents' | 'downloads' | 'music' | 'pictures' | 'videos' | 'recent' | 'logs' | 'crashDumps'): Promise<string>;
+  getAppVersion(): Promise<string>;
 }
-
 declare global {
   interface Window {
     promptApi: PromptApi;

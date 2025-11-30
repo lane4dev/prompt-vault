@@ -38,6 +38,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [newModelContextWindow, setNewModelContextWindow] = useState<number>(4096);
   const { theme, setTheme } = useTheme();
 
+  const [appVersion, setAppVersion] = useState("");
+
   const formatTokens = (num: number): string => {
     if (num >= 1_000_000) {
       return (num / 1_000_000).toFixed(0) + "M";
@@ -50,6 +52,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   useEffect(() => {
     if (open && activeTab === 'models') {
       fetchModels();
+    }
+    if (open) {
+      window.promptApi.getAppVersion().then(setAppVersion);
     }
   }, [open, activeTab]);
 
@@ -279,9 +284,12 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 </div>
                 <Separator />
                 <div className="text-sm space-y-2">
-                  <p><strong>Prompt Vault</strong> v0.1.0</p>
+                  <p><strong>Prompt Vault</strong> v{appVersion}</p>
                   <p className="text-muted-foreground">
                     A local-first prompt engineering tool designed for efficiency and privacy.
+                  </p>
+                  <p className="text-muted-foreground">
+                    Developed by Lane Tang &lt;hi@tangyu.me&gt;
                   </p>
                 </div>
               </div>

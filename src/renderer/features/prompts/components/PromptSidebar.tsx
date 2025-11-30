@@ -140,7 +140,7 @@ export function PromptSidebar({
       {/* Header: Search & Add */}
       <div className="p-4 space-y-4 border-b">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">Prompts</h2>
+          <h2 className="text-lg font-semibold tracking-tight">Prompts Vault</h2>
           <Button size="icon" variant="ghost" onClick={() => setIsAddPromptOpen(true)}>
             <Plus className="h-4 w-4" />
           </Button>
