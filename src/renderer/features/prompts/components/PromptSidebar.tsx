@@ -53,15 +53,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "renderer/components/ui/select";
-import { IpcPromptListItem, IpcModel } from "shared/ipc-types";
+import { IpcModel } from "shared/ipc-types";
+import { usePromptStore } from "renderer/stores/usePromptStore";
 
 interface PromptSidebarProps {
   className?: string;
-  prompts: IpcPromptListItem[];
-  selectedPromptId: string | null;
-  setSelectedPromptId: React.Dispatch<React.SetStateAction<string | null>>;
-  onCreatePrompt: (name: string, description: string, tags: string[], modelId?: string) => Promise<void>;
-  onDeletePrompt: (id: string) => Promise<void>;
 }
 
 const AVAILABLE_TAGS = [
@@ -71,12 +67,9 @@ const AVAILABLE_TAGS = [
 
 export function PromptSidebar({
   className,
-  prompts,
-  selectedPromptId,
-  setSelectedPromptId,
-  onCreatePrompt,
-  onDeletePrompt,
 }: PromptSidebarProps) {
+  const { prompts, selectedPromptId, setSelectedPromptId, createPrompt, deletePrompt } = usePromptStore();
+
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [promptToDelete, setPromptToDelete] = useState<string | null>(null);
   const [allModels, setAllModels] = useState<IpcModel[]>([]);
@@ -119,7 +112,7 @@ export function PromptSidebar({
 
   const handleDeletePromptConfirmed = async () => {
     if (promptToDelete) {
-      await onDeletePrompt(promptToDelete);
+      await deletePrompt(promptToDelete);
       setPromptToDelete(null);
     }
   };
@@ -127,7 +120,7 @@ export function PromptSidebar({
   const handleAddPrompt = async () => {
     if (!newPromptTitle.trim()) return;
     
-    await onCreatePrompt(newPromptTitle.trim(), newPromptGoal.trim(), newPromptTags, newPromptModelId);
+    await createPrompt(newPromptTitle.trim(), newPromptGoal.trim(), newPromptTags, newPromptModelId);
     setIsAddPromptOpen(false);
     
     // Reset form
