@@ -63,21 +63,21 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   };
 
   const handleAddModel = async () => {
-    if (newModelName.trim()) {
-      try {
-        const newModel = await window.promptApi.addModel({
-          name: newModelName.trim(),
-          provider: 'Custom',
-          contextWindow: newModelContextWindow,
-          maxOutputTokens: 4096,
-          isActive: true
-        });
-        setModels([...models, newModel]);
-        setNewModelName("");
-        setNewModelContextWindow(4096);
-      } catch (err) {
-        console.error("Failed to add model:", err);
-      }
+    try {
+      const newModel = await window.promptApi.addModel({
+        name: newModelName.trim(),
+        provider: 'Custom',
+        contextWindow: newModelContextWindow,
+        maxOutputTokens: 4096,
+        isActive: true
+      });
+      setModels([...models, newModel]);
+      setNewModelName("");
+      setNewModelContextWindow(4096);
+    } catch (err) {
+      console.error("Failed to add model:", err);
+      // A simple alert for unexpected API errors, as name collision is handled by UI disablement.
+      alert("Failed to add model. Please try again.");
     }
   };
 
@@ -108,6 +108,17 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       alert("Failed to delete model.");
     }
   };
+
+  const isNameEmpty = newModelName.trim() === '';
+  const isNameDuplicate = models.some(
+    (m) => m.name.toLowerCase() === newModelName.trim().toLowerCase(),
+  );
+
+  const derivedNameError = isNameEmpty
+    ? "Model name cannot be empty."
+    : isNameDuplicate
+      ? "Model with this name already exists."
+      : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -215,10 +226,13 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                         onKeyDown={(e) => e.key === "Enter" && handleAddModel()}
                       />
                     </div>
-                    <Button onClick={handleAddModel}>
+                    <Button onClick={handleAddModel} disabled={isNameEmpty || isNameDuplicate}>
                       <Plus className="mr-2 h-4 w-4" /> Add
                     </Button>
                   </div>
+                  {derivedNameError && !isNameEmpty && (
+                    <p className="text-sm text-red-500 -mt-2">{derivedNameError}</p>
+                  )}
 
                   <ScrollArea className="h-[250px] pr-2 border rounded-md">
                     <div className="p-1">
@@ -238,9 +252,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                                 checked={model.isActive || false}
                                 onCheckedChange={() => handleToggleActive(model.id, model.isActive || false)}
                             />
-                            <Button 
-                                variant="ghost" 
-                                size="icon" 
+                            <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-8 w-8 text-muted-foreground hover:text-destructive"
                                 onClick={() => handleDeleteModel(model.id)}
                             >
