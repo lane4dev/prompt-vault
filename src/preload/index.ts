@@ -17,6 +17,8 @@ const promptApi: PromptApi = {
 
   getAllModels: () => ipcRenderer.invoke(IpcChannels.GET_ALL_MODELS),
   addModel: (model) => ipcRenderer.invoke(IpcChannels.ADD_MODEL, model),
+  toggleModelActive: (id, isActive) => ipcRenderer.invoke(IpcChannels.TOGGLE_MODEL_ACTIVE, id, isActive),
+  deleteModel: (id) => ipcRenderer.invoke(IpcChannels.DELETE_MODEL, id),
 
   getAllTags: () => ipcRenderer.invoke(IpcChannels.GET_ALL_TAGS),
   addTag: (name) => ipcRenderer.invoke(IpcChannels.ADD_TAG, name),

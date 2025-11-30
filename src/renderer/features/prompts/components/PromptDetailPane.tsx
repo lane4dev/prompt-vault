@@ -261,6 +261,7 @@ export function PromptDetailPane({
   const handleSaveName = async () => {
     if (promptDetail && tempPromptName.trim() !== promptDetail.name) {
       await onUpdatePromptName(promptDetail.id, tempPromptName.trim());
+      setPromptDetail(prev => prev ? { ...prev, name: tempPromptName.trim() } : null);
     }
     setIsEditingName(false);
   };
@@ -643,11 +644,13 @@ export function PromptDetailPane({
                 <SelectValue placeholder="Select model" />
               </SelectTrigger>
               <SelectContent>
-                {allModels.map((model) => (
-                  <SelectItem key={model.id} value={model.id}>
-                    {model.name}
-                  </SelectItem>
-                ))}
+                {allModels
+                  .filter(m => m.isActive || m.id === currentModelId)
+                  .map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.name} {model.isActive === false ? "(Inactive)" : ""}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

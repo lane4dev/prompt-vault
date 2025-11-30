@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import { Separator } from "renderer/components/ui/separator";
 import { ScrollArea } from "renderer/components/ui/scroll-area";
 import { Settings, Monitor, Cpu, Info, Plus, Trash2 } from "lucide-react";
 import { cn } from "renderer/lib/utils";
+import { IpcModel } from "shared/ipc-types";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -24,18 +25,68 @@ type SettingsTab = "general" | "models" | "about";
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
-  const [customModels, setCustomModels] = useState<string[]>(["gpt-4o", "claude-3.5-sonnet"]);
+  const [models, setModels] = useState<IpcModel[]>([]);
   const [newModelName, setNewModelName] = useState("");
 
-  const handleAddModel = () => {
-    if (newModelName.trim() && !customModels.includes(newModelName.trim())) {
-      setCustomModels([...customModels, newModelName.trim()]);
-      setNewModelName("");
+  useEffect(() => {
+    if (open && activeTab === 'models') {
+      fetchModels();
+    }
+  }, [open, activeTab]);
+
+  const fetchModels = async () => {
+    try {
+      const fetchedModels = await window.promptApi.getAllModels();
+      setModels(fetchedModels);
+    } catch (err) {
+      console.error("Failed to fetch models:", err);
     }
   };
 
-  const handleDeleteModel = (model: string) => {
-    setCustomModels(customModels.filter((m) => m !== model));
+  const handleAddModel = async () => {
+    if (newModelName.trim()) {
+      try {
+        const newModel = await window.promptApi.addModel({
+          name: newModelName.trim(),
+          provider: 'Custom',
+          contextWindow: 4096,
+          maxOutputTokens: 4096,
+          isActive: true
+        });
+        setModels([...models, newModel]);
+        setNewModelName("");
+      } catch (err) {
+        console.error("Failed to add model:", err);
+      }
+    }
+  };
+
+  const handleToggleActive = async (id: string, currentStatus: boolean) => {
+    try {
+      await window.promptApi.toggleModelActive(id, !currentStatus);
+      setModels(models.map(m => m.id === id ? { ...m, isActive: !currentStatus } : m));
+    } catch (err) {
+      console.error("Failed to toggle model status:", err);
+    }
+  };
+
+  const handleDeleteModel = async (id: string) => {
+    try {
+      const result = await window.promptApi.deleteModel(id);
+      if (result.success) {
+        if (result.wasReferenced) {
+          // Soft deleted
+          setModels(models.map(m => m.id === id ? { ...m, isActive: false } : m));
+          alert("This model is currently used by one or more prompts. It has been deactivated instead of deleted to preserve data integrity.");
+        } else {
+          // Hard deleted
+          setModels(models.filter(m => m.id !== id));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to delete model:", err);
+      alert("Failed to delete model.");
+    }
   };
 
   return (
@@ -124,7 +175,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 <div className="space-y-4">
                   <div className="flex gap-2">
                     <Input 
-                      placeholder="Add new model ID..." 
+                      placeholder="Add new model name..." 
                       value={newModelName}
                       onChange={(e) => setNewModelName(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleAddModel()}
@@ -134,26 +185,35 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                     </Button>
                   </div>
 
-                  <ScrollArea className="h-[250px] pr-2">
-                    <div className="space-y-2">
-                      {customModels.map((model) => (
-                        <div key={model} className="flex items-center justify-between p-2 rounded-md border bg-card">
-                          <span className="text-sm font-medium">{model}</span>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onClick={() => handleDeleteModel(model)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                      {customModels.length === 0 && (
+                  <ScrollArea className="h-[250px] pr-2 border rounded-md">
+                    <div className="p-1">
+                      {models.length === 0 && (
                         <div className="text-sm text-muted-foreground text-center py-4">
-                          No custom models added.
+                          No models found.
                         </div>
                       )}
+                      {models.map((model) => (
+                        <div key={model.id} className={cn("flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors", !model.isActive && "text-muted-foreground italic")}>
+                          <div className="flex flex-col">
+                              <span className="text-sm font-medium">{model.name} {model.isActive === false && "(Inactive)"}</span>
+                              <span className="text-xs text-muted-foreground">{model.provider} • {model.contextWindow} tokens</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                                checked={model.isActive || false}
+                                onCheckedChange={() => handleToggleActive(model.id, model.isActive || false)}
+                            />
+                            <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                onClick={() => handleDeleteModel(model.id)}
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </ScrollArea>
                 </div>

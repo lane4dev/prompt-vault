@@ -97,9 +97,10 @@ export function PromptManagerScreen() {
   const handleUpdatePromptCurrentModelId = async (id: string, newModelId: string) => {
     try {
       await window.promptApi.updatePrompt(id, { currentModelId: newModelId });
+      // Don't update lastModified here, as this is considered a draft change
       setPrompts((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, model: newModelId, lastModified: Date.now() } : p))
-      ); // Update list item's model display
+        prev.map((p) => (p.id === id ? { ...p, model: newModelId } : p))
+      ); 
     } catch (err) {
       console.error("Failed to update prompt current model ID:", err);
       setError("Failed to update prompt current model ID.");
@@ -171,6 +172,12 @@ export function PromptManagerScreen() {
         copySamplesFromVersionId,
         archivePreviousVersionId
       );
+      
+      // Update the prompt's lastModified in the list because creating a version (Save) is a major update
+      setPrompts((prev) =>
+        prev.map((p) => (p.id === promptId ? { ...p, lastModified: Date.now() } : p))
+      );
+
       return newVersion;
     } catch (err) {
       console.error("Failed to create prompt version:", err);

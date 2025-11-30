@@ -12,6 +12,8 @@ export const IpcChannels = {
   // Models
   GET_ALL_MODELS: 'model:get-all',
   ADD_MODEL: 'model:add',
+  TOGGLE_MODEL_ACTIVE: 'model:toggle-active',
+  DELETE_MODEL: 'model:delete',
   // Tags
   GET_ALL_TAGS: 'tag:get-all',
   ADD_TAG: 'tag:add',
@@ -116,6 +118,8 @@ export interface PromptApi {
 
   getAllModels(): Promise<IpcModel[]>;
   addModel(model: Omit<IpcModel, 'id'>): Promise<IpcModel>;
+  toggleModelActive(id: string, isActive: boolean): Promise<void>;
+  deleteModel(id: string): Promise<{ success: boolean; wasReferenced: boolean }>;
 
   getAllTags(): Promise<IpcTag[]>;
   addTag(name: string): Promise<IpcTag>;
