@@ -7,15 +7,19 @@ import {
 } from "renderer/components/ui/sheet";
 import { ScrollArea } from "renderer/components/ui/scroll-area";
 import { Badge } from "renderer/components/ui/badge";
+import { Button } from "renderer/components/ui/button";
+import { RotateCcw } from "lucide-react";
 import { IpcPromptVersion } from "shared/ipc-types";
+import { cn } from "renderer/lib/utils";
 
 interface PromptHistorySidebarProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   versions: IpcPromptVersion[];
+  onRevertVersion: (version: IpcPromptVersion) => void;
 }
 
-export function PromptHistorySidebar({ open, onOpenChange, versions }: PromptHistorySidebarProps) {
+export function PromptHistorySidebar({ open, onOpenChange, versions, onRevertVersion }: PromptHistorySidebarProps) {
   // Sort versions by creation time descending
   const sortedVersions = [...versions].sort((a, b) => b.createdAt - a.createdAt);
 
@@ -48,6 +52,15 @@ export function PromptHistorySidebar({ open, onOpenChange, versions }: PromptHis
                        <Badge variant={version.isMajorVersion ? "default" : "secondary"} className="text-xs py-0 h-5">
                          {version.label}
                        </Badge>
+                       <Button
+                         variant="ghost"
+                         size="icon"
+                         className="h-6 w-6 ml-auto"
+                         onClick={() => onRevertVersion && onRevertVersion(version)}
+                         title="Revert to this version"
+                       >
+                         <RotateCcw className="h-3 w-3" />
+                       </Button>
                      </div>
                      <p className="text-sm text-muted-foreground">
                        {version.note || (version.isMajorVersion ? "Major Version" : "Snapshot")}
@@ -62,5 +75,3 @@ export function PromptHistorySidebar({ open, onOpenChange, versions }: PromptHis
     </Sheet>
   );
 }
-
-import { cn } from "renderer/lib/utils";

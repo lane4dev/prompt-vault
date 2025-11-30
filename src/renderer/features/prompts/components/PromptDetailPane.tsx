@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "renderer/components/ui/button";
 import { Input } from "renderer/components/ui/input";
 import { Label } from "renderer/components/ui/label";
@@ -145,6 +145,10 @@ export function PromptDetailPane({
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [promptMode, setPromptMode] = useState<'api' | 'chat'>('api');
 
+  // Revert Version State
+  const [isRevertingVersion, setIsRevertingVersion] = useState(false);
+  const [versionToRevert, setVersionToRevert] = useState<IpcPromptVersion | null>(null);
+
   // --- Data Fetching & Synchronization --- //
   useEffect(() => {
     const fetchDetail = async () => {
@@ -256,6 +260,37 @@ export function PromptDetailPane({
     }
   }, [activeVersionId, promptDetail, versions]);
 
+  const isModified = useMemo(() => {
+    if (!promptDetail) return false;
+
+    // Find the latest major version (the "baseline" for saving a new version)
+    const majorVersions = versions.filter(v => v.isMajorVersion);
+    const latestMajor = majorVersions.length > 0 ? majorVersions[majorVersions.length - 1] : null;
+
+    if (!latestMajor) {
+      // If no major version exists, allow save if there's content
+      return !!currentContent.trim();
+    }
+
+    // Comparison Logic
+    const contentChanged = currentContent !== latestMajor.content;
+    const modelChanged = currentModelId !== (latestMajor.modelId || "");
+    const tempChanged = currentTemperature !== (latestMajor.temperature || 0.7);
+    const tokenLimitChanged = currentTokenLimit !== latestMajor.tokenLimit;
+    const topKChanged = currentTopK !== latestMajor.topK;
+    const topPChanged = currentTopP !== latestMajor.topP;
+
+    return contentChanged || modelChanged || tempChanged || tokenLimitChanged || topKChanged || topPChanged;
+  }, [
+    promptDetail,
+    versions,
+    currentContent,
+    currentModelId,
+    currentTemperature,
+    currentTokenLimit,
+    currentTopK,
+    currentTopP
+  ]);
 
   // --- Handlers --- //
   const handleSaveName = async () => {
@@ -445,6 +480,40 @@ export function PromptDetailPane({
     const newDescription = e.target.value;
     setCurrentDescription(newDescription);
     await onUpdatePromptDescription(promptDetail.id, newDescription);
+  };
+
+  const handleRevertVersion = (version: IpcPromptVersion) => {
+    setVersionToRevert(version);
+    setIsRevertingVersion(true);
+  };
+
+  const handleRevertConfirm = async () => {
+    if (!promptDetail || !versionToRevert) return;
+
+    // Update local states
+    setCurrentContent(versionToRevert.content);
+    setCurrentModelId(versionToRevert.modelId || "");
+    setCurrentTemperature(versionToRevert.temperature || 0.7);
+    setCurrentTokenLimit(versionToRevert.tokenLimit);
+    setCurrentTopK(versionToRevert.topK);
+    setCurrentTopP(versionToRevert.topP);
+
+    // Update DB Draft via IPC
+    await onUpdatePromptCurrentContent(promptDetail.id, versionToRevert.content);
+    await onUpdatePromptCurrentModelId(promptDetail.id, versionToRevert.modelId || "");
+    await onUpdatePromptCurrentTemperature(promptDetail.id, versionToRevert.temperature || 0.7);
+    await onUpdatePromptCurrentTokenLimit(promptDetail.id, versionToRevert.tokenLimit || undefined as any);
+    await onUpdatePromptCurrentTopK(promptDetail.id, versionToRevert.topK || undefined as any);
+    await onUpdatePromptCurrentTopP(promptDetail.id, versionToRevert.topP || undefined as any);
+
+    setIsRevertingVersion(false);
+    setVersionToRevert(null);
+    setIsHistoryOpen(false); // Close history sidebar after revert
+  };
+
+  const handleRevertCancel = () => {
+    setIsRevertingVersion(false);
+    setVersionToRevert(null);
   };
 
   if (isLoadingDetail) {
@@ -808,6 +877,7 @@ export function PromptDetailPane({
         open={isHistoryOpen}
         onOpenChange={setIsHistoryOpen}
         versions={activeVersion ? versions.filter(v => v.label === activeVersion.label) : []} // Filter history by current active version label
+        onRevertVersion={handleRevertVersion} // Pass the handler
       />
 
       {/* Rename Version Dialog */}
@@ -815,9 +885,6 @@ export function PromptDetailPane({
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitleShadcn>Rename Version</DialogTitleShadcn>
-            <DialogDescription>
-              Enter a new name for version "{activeVersion?.label}".
-            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
@@ -852,6 +919,25 @@ export function PromptDetailPane({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteVersion} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Revert Version Alert Dialog */}
+      <AlertDialog open={isRevertingVersion} onOpenChange={setIsRevertingVersion}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{`Revert to Version "${versionToRevert?.label}"?`}</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will load the content and parameters of "{versionToRevert?.label}" into your current draft.
+              Any unsaved changes in your draft will be overwritten.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleRevertCancel}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRevertConfirm}>
+              Revert
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
