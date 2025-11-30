@@ -71,19 +71,10 @@ export function PromptDetailPane() {
     isLoadingDetail,
     error: errorDetail,
     models: allModels,
-    updatePromptName,
-    updatePromptDescription,
-    updatePromptCurrentContent,
-    updatePromptCurrentModelId,
-    updatePromptCurrentTemperature,
-    updatePromptCurrentTokenLimit,
-    updatePromptCurrentTopK,
-    updatePromptCurrentTopP,
-    updatePromptTags,
+    updatePrompt,
     createPromptVersion,
     createOutputSample,
     fetchModels,
-    fetchPromptDetail,
   } = usePromptStore();
 
   // Local states for editable fields, synchronized with promptDetail
@@ -139,11 +130,6 @@ export function PromptDetailPane() {
       setVersions(promptDetail.versions);
 
       // Initialize active version if not already set or if switching prompts
-      // Ideally, we might want to preserve the selected version ID if it exists in the new prompt (unlikely)
-      // or default to the latest major.
-      
-      // Check if we need to reset active version (e.g. prompt changed)
-      // A simple heuristic: if activeVersionId is not in the new versions list, reset.
       const versionExists = activeVersionId && promptDetail.versions.some(v => v.id === activeVersionId);
       
       if (!versionExists) {
@@ -186,8 +172,7 @@ export function PromptDetailPane() {
       setSamples([]);
       setActiveSampleId(null);
     }
-  }, [promptDetail]); // Dependency on promptDetail is key
-
+  }, [promptDetail]);
 
   // Update samples when activeVersionId changes (handled by the effect above partially, but needed for manual switching)
   useEffect(() => {
@@ -198,8 +183,6 @@ export function PromptDetailPane() {
 
     if (selectedVersion) {
       // 1. Update local states from selected version
-      // NOTE: This overwrites current draft changes when switching versions. 
-      // In a real app, might want to warn user if draft is dirty.
       setCurrentContent(selectedVersion.content);
       setCurrentModelId(selectedVersion.modelId || "");
       setCurrentTemperature(selectedVersion.temperature || 0.7);
@@ -208,19 +191,21 @@ export function PromptDetailPane() {
       setCurrentTopP(selectedVersion.topP);
 
       // 2. Update database 'current' fields via IPC to reflect the switch
-      updatePromptCurrentContent(promptDetail.id, selectedVersion.content);
-      updatePromptCurrentModelId(promptDetail.id, selectedVersion.modelId || "");
-      updatePromptCurrentTemperature(promptDetail.id, selectedVersion.temperature || 0.7);
-      updatePromptCurrentTokenLimit(promptDetail.id, selectedVersion.tokenLimit || undefined as any);
-      updatePromptCurrentTopK(promptDetail.id, selectedVersion.topK || undefined as any);
-      updatePromptCurrentTopP(promptDetail.id, selectedVersion.topP || undefined as any);
+      updatePrompt(promptDetail.id, {
+        currentContent: selectedVersion.content,
+        currentModelId: selectedVersion.modelId || "",
+        currentTemperature: selectedVersion.temperature || 0.7,
+        currentTokenLimit: selectedVersion.tokenLimit || undefined,
+        currentTopK: selectedVersion.topK || undefined,
+        currentTopP: selectedVersion.topP || undefined
+      });
 
       // 3. Update samples for the selected version
       const versionSamples = promptDetail.outputSamples.filter(s => s.versionId === selectedVersion.id);
       setSamples(versionSamples);
       setActiveSampleId(versionSamples.length > 0 ? versionSamples[0].id : null);
     }
-  }, [activeVersionId]); // Remove other deps to avoid loops. Logic inside handles promptDetail access.
+  }, [activeVersionId]); 
 
   const isModified = useMemo(() => {
     if (!promptDetail) return false;
@@ -257,7 +242,7 @@ export function PromptDetailPane() {
   // --- Handlers --- //
   const handleSaveName = async () => {
     if (promptDetail && tempPromptName.trim() !== promptDetail.name) {
-      await updatePromptName(promptDetail.id, tempPromptName.trim());
+      await updatePrompt(promptDetail.id, { name: tempPromptName.trim() });
     }
     setIsEditingName(false);
   };
@@ -273,7 +258,7 @@ export function PromptDetailPane() {
       ? currentPromptTags.filter((t) => t !== tag)
       : [...currentPromptTags, tag];
     setCurrentPromptTags(newTags);
-    await updatePromptTags(promptDetail.id, newTags);
+    await updatePrompt(promptDetail.id, { tags: newTags });
   };
 
   const activeVersion = versions.find(v => v.id === activeVersionId);
@@ -282,21 +267,18 @@ export function PromptDetailPane() {
   const handleAddVersion = async () => {
     if (!promptDetail) return;
     try {
-      const newVersion = await createPromptVersion(
-        promptDetail.id,
-        `v${versions.filter(v => v.isMajorVersion).length + 1}`, // Count only major versions for naming
-        currentContent,
-        currentModelId,
-        currentTemperature,
-        currentTokenLimit,
-        currentTopK,
-        currentTopP,
-        "Manual Version",
-        true, // isMajorVersion = true
-        undefined, // No sample copy
-        undefined // No archive
-      );
-      // Store updates automatically via fetchPromptDetail inside createPromptVersion
+      const newVersion = await createPromptVersion({
+        promptId: promptDetail.id,
+        label: `v${versions.filter(v => v.isMajorVersion).length + 1}`,
+        content: currentContent,
+        modelId: currentModelId,
+        temperature: currentTemperature,
+        tokenLimit: currentTokenLimit,
+        topK: currentTopK,
+        topP: currentTopP,
+        note: "Manual Version",
+        isMajorVersion: true,
+      });
       setActiveVersionId(newVersion.id);
     } catch (error) {
       console.error("Failed to add version", error);
@@ -306,20 +288,20 @@ export function PromptDetailPane() {
   const handleSaveVersion = async () => {
     if (!promptDetail || !activeVersion) return;
     try {
-      const newMajorVersion = await createPromptVersion(
-        promptDetail.id,
-        activeVersion.label, // Reuse label (simulate update)
-        currentContent,
-        currentModelId,
-        currentTemperature,
-        currentTokenLimit,
-        currentTopK,
-        currentTopP,
-        `Saved at ${new Date().toLocaleTimeString()}`,
-        true, // isMajorVersion = true (This is the new head)
-        activeVersionId || undefined, // Copy samples from current version
-        activeVersionId || undefined // Archive the current version
-      );
+      const newMajorVersion = await createPromptVersion({
+        promptId: promptDetail.id,
+        label: activeVersion.label,
+        content: currentContent,
+        modelId: currentModelId,
+        temperature: currentTemperature,
+        tokenLimit: currentTokenLimit,
+        topK: currentTopK,
+        topP: currentTopP,
+        note: `Saved at ${new Date().toLocaleTimeString()}`,
+        isMajorVersion: true,
+        copySamplesFromVersionId: activeVersionId || undefined,
+        archivePreviousVersionId: activeVersionId || undefined,
+      });
        setActiveVersionId(newMajorVersion.id);
     } catch (error) {
        console.error("Failed to save version", error);
@@ -329,7 +311,6 @@ export function PromptDetailPane() {
   const handleRenameVersion = () => {
     // TODO: Implement IPC
     if (activeVersion && tempVersionName.trim()) {
-      // Mock update local state for UI responsiveness, real impl needs IPC
       setVersions(versions.map(v =>
         v.id === activeVersionId ? { ...v, label: tempVersionName.trim() } : v
       ));
@@ -343,15 +324,15 @@ export function PromptDetailPane() {
     const newVersions = versions.filter(v => v.id !== activeVersionId);
     setVersions(newVersions);
 
-    // Find next version to select (prefer major versions)
     const nextMajor = newVersions.filter(v => v.isMajorVersion);
     if (nextMajor.length > 0) {
       setActiveVersionId(nextMajor[nextMajor.length - 1].id);
     } else if (newVersions.length > 0) {
       setActiveVersionId(newVersions[newVersions.length - 1].id);
     } else {
-      // Create default
-      // Ideally should call create API or handle empty state
+      if (promptDetail) {
+        // const newVersionId = uuidv4();
+      }
     }
     setIsDeletingVersion(false);
   };
@@ -359,18 +340,17 @@ export function PromptDetailPane() {
   const handlePromptContentChange = async (newContent: string) => {
     if (!promptDetail) return;
     setCurrentContent(newContent);
-    await updatePromptCurrentContent(promptDetail.id, newContent);
+    await updatePrompt(promptDetail.id, { currentContent: newContent });
   };
 
   const handleAddSample = async () => {
     if (!promptDetail || !activeVersionId) return;
     try {
-      const newSample = await createOutputSample(activeVersionId, `Sample ${samples.length + 1}`, "");
-      // Store updates automatically via fetchPromptDetail inside createOutputSample logic (if added)
-      // For now, assume we need to manually update local list or wait for re-fetch
-      // Ideally createOutputSample in store should trigger re-fetch of details.
-      // Assuming store does that:
-      // We rely on the useEffect(promptDetail) to update samples.
+      await createOutputSample({
+        versionId: activeVersionId,
+        name: `Sample ${samples.length + 1}`,
+        content: ""
+      });
     } catch (error) {
        console.error("Failed to add sample", error);
     }
@@ -395,7 +375,7 @@ export function PromptDetailPane() {
   const handleModelChange = async (value: string) => {
     if (!promptDetail) return;
     setCurrentModelId(value);
-    await updatePromptCurrentModelId(promptDetail.id, value);
+    await updatePrompt(promptDetail.id, { currentModelId: value });
   };
 
   const handleTemperatureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -403,7 +383,7 @@ export function PromptDetailPane() {
     const value = parseFloat(e.target.value);
     if (!isNaN(value)) {
       setCurrentTemperature(value);
-      await updatePromptCurrentTemperature(promptDetail.id, value);
+      await updatePrompt(promptDetail.id, { currentTemperature: value });
     }
   };
 
@@ -412,7 +392,7 @@ export function PromptDetailPane() {
     const value = parseInt(e.target.value);
     if (!isNaN(value)) {
       setCurrentTokenLimit(value);
-      await updatePromptCurrentTokenLimit(promptDetail.id, value);
+      await updatePrompt(promptDetail.id, { currentTokenLimit: value });
     }
   };
 
@@ -421,10 +401,10 @@ export function PromptDetailPane() {
     const value = parseInt(e.target.value);
     if (!isNaN(value)) {
       setCurrentTopK(value);
-      await updatePromptCurrentTopK(promptDetail.id, value);
+      await updatePrompt(promptDetail.id, { currentTopK: value });
     } else if (e.target.value === '') {
       setCurrentTopK(undefined);
-      await updatePromptCurrentTopK(promptDetail.id, undefined as any);
+      await updatePrompt(promptDetail.id, { currentTopK: undefined });
     }
   };
 
@@ -433,10 +413,10 @@ export function PromptDetailPane() {
     const value = parseFloat(e.target.value);
     if (!isNaN(value)) {
       setCurrentTopP(value);
-      await updatePromptCurrentTopP(promptDetail.id, value);
+      await updatePrompt(promptDetail.id, { currentTopP: value });
     } else if (e.target.value === '') {
       setCurrentTopP(undefined);
-      await updatePromptCurrentTopP(promptDetail.id, undefined as any);
+      await updatePrompt(promptDetail.id, { currentTopP: undefined });
     }
   };
 
@@ -444,7 +424,7 @@ export function PromptDetailPane() {
     if (!promptDetail) return;
     const newDescription = e.target.value;
     setCurrentDescription(newDescription);
-    await updatePromptDescription(promptDetail.id, newDescription);
+    await updatePrompt(promptDetail.id, { description: newDescription });
   };
 
   const handleRevertVersion = (version: IpcPromptVersion) => {
@@ -464,12 +444,14 @@ export function PromptDetailPane() {
     setCurrentTopP(versionToRevert.topP);
 
     // Update DB Draft via IPC
-    await updatePromptCurrentContent(promptDetail.id, versionToRevert.content);
-    await updatePromptCurrentModelId(promptDetail.id, versionToRevert.modelId || "");
-    await updatePromptCurrentTemperature(promptDetail.id, versionToRevert.temperature || 0.7);
-    await updatePromptCurrentTokenLimit(promptDetail.id, versionToRevert.tokenLimit || undefined as any);
-    await updatePromptCurrentTopK(promptDetail.id, versionToRevert.topK || undefined as any);
-    await updatePromptCurrentTopP(promptDetail.id, versionToRevert.topP || undefined as any);
+    await updatePrompt(promptDetail.id, {
+        currentContent: versionToRevert.content,
+        currentModelId: versionToRevert.modelId || "",
+        currentTemperature: versionToRevert.temperature || 0.7,
+        currentTokenLimit: versionToRevert.tokenLimit || undefined,
+        currentTopK: versionToRevert.topK || undefined,
+        currentTopP: versionToRevert.topP || undefined
+    });
 
     setIsRevertingVersion(false);
     setVersionToRevert(null);
@@ -508,7 +490,7 @@ export function PromptDetailPane() {
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Top Header */}
-      <div className="flex flex-col px-6 py-2 border-b gap-4">
+      <div className="flex flex-col px-6 py-4 border-b gap-4">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-4">
             {isEditingName ? (

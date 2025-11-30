@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { IpcPromptListItem, IpcPromptDetail, IpcModel, IpcPromptVersion, IpcOutputSample } from 'shared/ipc-types';
+import { PromptService } from 'renderer/features/prompts/domain/PromptService';
+import { CreatePromptPayload, UpdatePromptPayload, CreateVersionPayload, CreateOutputSamplePayload } from 'renderer/features/prompts/domain/models';
 
 interface PromptState {
   // State
@@ -15,38 +17,16 @@ interface PromptState {
   fetchPrompts: () => Promise<void>;
   fetchPromptDetail: (id: string) => Promise<void>;
   setSelectedPromptId: (id: string | null) => void;
-
-  createPrompt: (name: string, description: string, tags: string[], modelId?: string) => Promise<void>;
+  
+  createPrompt: (payload: CreatePromptPayload) => Promise<void>;
   deletePrompt: (id: string) => Promise<void>;
+  
+  // Unified update action
+  updatePrompt: (id: string, payload: UpdatePromptPayload) => Promise<void>;
 
-  updatePromptName: (id: string, newName: string) => Promise<void>;
-  updatePromptDescription: (id: string, newDescription: string) => Promise<void>;
-  updatePromptTags: (id: string, newTags: string[]) => Promise<void>;
+  createPromptVersion: (payload: CreateVersionPayload) => Promise<IpcPromptVersion>;
 
-  // Detail-specific updates (operate on selectedPromptDetail)
-  updatePromptCurrentContent: (id: string, content: string) => Promise<void>;
-  updatePromptCurrentModelId: (id: string, modelId: string) => Promise<void>;
-  updatePromptCurrentTemperature: (id: string, temperature: number) => Promise<void>;
-  updatePromptCurrentTokenLimit: (id: string, tokenLimit: number) => Promise<void>;
-  updatePromptCurrentTopK: (id: string, topK: number) => Promise<void>;
-  updatePromptCurrentTopP: (id: string, topP: number) => Promise<void>;
-
-  createPromptVersion: (
-    promptId: string,
-    label: string,
-    content: string,
-    modelId: string,
-    temperature: number,
-    tokenLimit: number | undefined,
-    topK: number | undefined,
-    topP: number | undefined,
-    note: string | undefined,
-    isMajorVersion: boolean,
-    copySamplesFromVersionId?: string,
-    archivePreviousVersionId?: string
-  ) => Promise<IpcPromptVersion>;
-
-  createOutputSample: (versionId: string, name: string, content: string) => Promise<IpcOutputSample>;
+  createOutputSample: (payload: CreateOutputSamplePayload) => Promise<IpcOutputSample>;
 
   fetchModels: () => Promise<void>;
 }
@@ -65,7 +45,7 @@ export const usePromptStore = create<PromptState>((set, get) => ({
   fetchPrompts: async () => {
     set({ isLoadingPrompts: true, error: null });
     try {
-      const prompts = await window.promptApi.getAllPrompts();
+      const prompts = await PromptService.getAllPrompts();
       set({ prompts: prompts || [], isLoadingPrompts: false });
     } catch (err) {
       console.error("Failed to fetch prompts:", err);
@@ -76,7 +56,7 @@ export const usePromptStore = create<PromptState>((set, get) => ({
   fetchPromptDetail: async (id: string) => {
     set({ isLoadingDetail: true, error: null, selectedPromptDetail: null });
     try {
-      const detail = await window.promptApi.getPromptDetails(id);
+      const detail = await PromptService.getPromptDetail(id);
       set({ selectedPromptDetail: detail, isLoadingDetail: false });
     } catch (err) {
       console.error(`Failed to fetch prompt detail for ${id}:`, err);
@@ -93,12 +73,12 @@ export const usePromptStore = create<PromptState>((set, get) => ({
     }
   },
 
-  createPrompt: async (name, description, tags, modelId) => {
+  createPrompt: async (payload) => {
     try {
-      const newPrompt = await window.promptApi.createPrompt(name, description, tags, modelId);
-      set((state) => ({
+      const newPrompt = await PromptService.createPrompt(payload);
+      set((state) => ({ 
         prompts: [...state.prompts, newPrompt],
-        selectedPromptId: newPrompt.id
+        selectedPromptId: newPrompt.id 
       }));
       // Immediately fetch detail for the new prompt
       get().fetchPromptDetail(newPrompt.id);
@@ -111,7 +91,7 @@ export const usePromptStore = create<PromptState>((set, get) => ({
 
   deletePrompt: async (id) => {
     try {
-      await window.promptApi.deletePrompt(id);
+      await PromptService.deletePrompt(id);
       set((state) => {
         const newPrompts = state.prompts.filter(p => p.id !== id);
         let newSelectedId = state.selectedPromptId;
@@ -120,7 +100,7 @@ export const usePromptStore = create<PromptState>((set, get) => ({
         }
         return { prompts: newPrompts, selectedPromptId: newSelectedId };
       });
-
+      
       // If we switched prompts, fetch the new one
       const newId = get().selectedPromptId;
       if (newId) {
@@ -134,162 +114,64 @@ export const usePromptStore = create<PromptState>((set, get) => ({
     }
   },
 
-  updatePromptName: async (id, newName) => {
+  updatePrompt: async (id, payload) => {
     try {
-      await window.promptApi.updatePrompt(id, { name: newName });
-      set((state) => ({
-        prompts: state.prompts.map(p => p.id === id ? { ...p, name: newName, lastModified: Date.now() } : p),
-        selectedPromptDetail: state.selectedPromptDetail?.id === id
-          ? { ...state.selectedPromptDetail, name: newName }
-          : state.selectedPromptDetail
-      }));
+      await PromptService.updatePrompt(id, payload);
+      
+      const isMetadataUpdate = payload.name !== undefined || payload.description !== undefined || payload.tags !== undefined;
+      const isDraftUpdate = payload.currentContent !== undefined || payload.currentModelId !== undefined 
+                            || payload.currentTemperature !== undefined || payload.currentTokenLimit !== undefined 
+                            || payload.currentTopK !== undefined || payload.currentTopP !== undefined;
+
+      set((state) => {
+        let newPrompts = state.prompts;
+        let newDetail = state.selectedPromptDetail;
+
+        // Update list if metadata changed
+        if (isMetadataUpdate) {
+            newPrompts = state.prompts.map(p => {
+                if (p.id !== id) return p;
+                return {
+                    ...p,
+                    ...payload.name && { name: payload.name },
+                    ...payload.description && { description: payload.description },
+                    ...payload.tags && { tags: payload.tags },
+                    lastModified: Date.now()
+                };
+            });
+        }
+
+        // Update detail if it's the current one
+        if (newDetail?.id === id) {
+            newDetail = {
+                ...newDetail,
+                ...payload // Spread all updates directly into detail
+            };
+        }
+
+        return {
+            prompts: newPrompts,
+            selectedPromptDetail: newDetail
+        };
+      });
+
     } catch (err) {
-      console.error("Failed to update prompt name:", err);
-      set({ error: "Failed to update prompt name" });
+      console.error("Failed to update prompt:", err);
+      set({ error: "Failed to update prompt" });
     }
   },
 
-  updatePromptDescription: async (id, newDescription) => {
+  createPromptVersion: async (payload) => {
     try {
-      await window.promptApi.updatePrompt(id, { description: newDescription });
+      const newVersion = await PromptService.createVersion(payload);
+      
+      // Update prompts list lastModified (saving version is a major event)
       set((state) => ({
-        prompts: state.prompts.map(p => p.id === id ? { ...p, description: newDescription, lastModified: Date.now() } : p),
-        selectedPromptDetail: state.selectedPromptDetail?.id === id
-          ? { ...state.selectedPromptDetail, description: newDescription }
-          : state.selectedPromptDetail
-      }));
-    } catch (err) {
-      console.error("Failed to update prompt description:", err);
-      set({ error: "Failed to update prompt description" });
-    }
-  },
-
-  updatePromptTags: async (id, newTags) => {
-    try {
-      await window.promptApi.updatePromptTags(id, newTags);
-      set((state) => ({
-        prompts: state.prompts.map(p => p.id === id ? { ...p, tags: newTags, lastModified: Date.now() } : p),
-        selectedPromptDetail: state.selectedPromptDetail?.id === id
-          ? { ...state.selectedPromptDetail, tags: newTags }
-          : state.selectedPromptDetail
-      }));
-    } catch (err) {
-      console.error("Failed to update prompt tags:", err);
-      set({ error: "Failed to update prompt tags" });
-    }
-  },
-
-  updatePromptCurrentContent: async (id, content) => {
-    try {
-      await window.promptApi.updatePrompt(id, { currentContent: content });
-      // This doesn't update 'prompts' list lastModified, as it's a draft change
-      set((state) => ({
-        selectedPromptDetail: state.selectedPromptDetail?.id === id
-          ? { ...state.selectedPromptDetail, currentContent: content }
-          : state.selectedPromptDetail
-      }));
-    } catch (err) {
-      console.error("Failed to update prompt content:", err);
-      set({ error: "Failed to update prompt content" });
-    }
-  },
-
-  updatePromptCurrentModelId: async (id, modelId) => {
-    try {
-      await window.promptApi.updatePrompt(id, { currentModelId: modelId });
-      set((state) => ({
-        selectedPromptDetail: state.selectedPromptDetail?.id === id
-          ? { ...state.selectedPromptDetail, currentModelId: modelId }
-          : state.selectedPromptDetail
-      }));
-    } catch (err) {
-      console.error("Failed to update prompt model:", err);
-      set({ error: "Failed to update prompt model" });
-    }
-  },
-
-  updatePromptCurrentTemperature: async (id, temperature) => {
-    try {
-      await window.promptApi.updatePrompt(id, { currentTemperature: temperature });
-      set((state) => ({
-        selectedPromptDetail: state.selectedPromptDetail?.id === id
-          ? { ...state.selectedPromptDetail, currentTemperature: temperature }
-          : state.selectedPromptDetail
-      }));
-    } catch (err) {
-      console.error("Failed to update prompt temperature:", err);
-      set({ error: "Failed to update prompt temperature" });
-    }
-  },
-
-  updatePromptCurrentTokenLimit: async (id, tokenLimit) => {
-    try {
-      await window.promptApi.updatePrompt(id, { currentTokenLimit: tokenLimit });
-      set((state) => ({
-        selectedPromptDetail: state.selectedPromptDetail?.id === id
-          ? { ...state.selectedPromptDetail, currentTokenLimit: tokenLimit }
-          : state.selectedPromptDetail
-      }));
-    } catch (err) {
-      console.error("Failed to update prompt token limit:", err);
-      set({ error: "Failed to update prompt token limit" });
-    }
-  },
-
-  updatePromptCurrentTopK: async (id, topK) => {
-    try {
-      await window.promptApi.updatePrompt(id, { currentTopK: topK });
-      set((state) => ({
-        selectedPromptDetail: state.selectedPromptDetail?.id === id
-          ? { ...state.selectedPromptDetail, currentTopK: topK }
-          : state.selectedPromptDetail
-      }));
-    } catch (err) {
-      console.error("Failed to update prompt top K:", err);
-      set({ error: "Failed to update prompt top K" });
-    }
-  },
-
-  updatePromptCurrentTopP: async (id, topP) => {
-    try {
-      await window.promptApi.updatePrompt(id, { currentTopP: topP });
-      set((state) => ({
-        selectedPromptDetail: state.selectedPromptDetail?.id === id
-          ? { ...state.selectedPromptDetail, currentTopP: topP }
-          : state.selectedPromptDetail
-      }));
-    } catch (err) {
-      console.error("Failed to update prompt top P:", err);
-      set({ error: "Failed to update prompt top P" });
-    }
-  },
-
-  createPromptVersion: async (
-    promptId,
-    label,
-    content,
-    modelId,
-    temperature,
-    tokenLimit,
-    topK,
-    topP,
-    note,
-    isMajorVersion,
-    copySamplesFromVersionId,
-    archivePreviousVersionId
-  ) => {
-    try {
-      const newVersion = await window.promptApi.createPromptVersion(
-        promptId, label, content, modelId, temperature, tokenLimit, topK, topP, note, isMajorVersion, copySamplesFromVersionId, archivePreviousVersionId
-      );
-
-      // Update prompts list lastModified
-      set((state) => ({
-        prompts: state.prompts.map(p => p.id === promptId ? { ...p, lastModified: Date.now() } : p),
+        prompts: state.prompts.map(p => p.id === payload.promptId ? { ...p, lastModified: Date.now() } : p),
       }));
 
       // Refetch details to get the new version list
-      get().fetchPromptDetail(promptId);
+      get().fetchPromptDetail(payload.promptId);
 
       return newVersion;
     } catch (err) {
@@ -299,22 +181,15 @@ export const usePromptStore = create<PromptState>((set, get) => ({
     }
   },
 
-  createOutputSample: async (versionId, name, content) => {
+  createOutputSample: async (payload) => {
     try {
-      const newSample = await window.promptApi.createOutputSample(versionId, name, content);
-
-      // We might need to update the selectedPromptDetail if the sample belongs to one of its versions.
-      // However, outputSamples are usually nested inside versions or fetched separately.
-      // Based on IpcPromptDetail, 'outputSamples' is a top-level array in the detail response?
-      // Let's check IpcPromptDetail definition. It says: "outputSamples: IpcOutputSample[]".
-      // Assuming this list contains ALL samples for the prompt or relevant ones.
-      // For now, easiest is to refetch detail or manually append if we know where.
-      // Since `createOutputSample` is often called from the UI, refetching is safer to ensure consistency.
+      const newSample = await PromptService.createOutputSample(payload);
+      
       const currentId = get().selectedPromptId;
       if (currentId) {
         get().fetchPromptDetail(currentId);
       }
-
+      
       return newSample;
     } catch (err) {
       console.error("Failed to create output sample:", err);
@@ -325,7 +200,7 @@ export const usePromptStore = create<PromptState>((set, get) => ({
 
   fetchModels: async () => {
     try {
-      const models = await window.promptApi.getAllModels();
+      const models = await PromptService.getAllModels();
       set({ models });
     } catch (err) {
       console.error("Failed to fetch models:", err);
@@ -333,3 +208,4 @@ export const usePromptStore = create<PromptState>((set, get) => ({
   }
 
 }));
+

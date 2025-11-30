@@ -120,7 +120,12 @@ export function PromptSidebar({
   const handleAddPrompt = async () => {
     if (!newPromptTitle.trim()) return;
     
-    await createPrompt(newPromptTitle.trim(), newPromptGoal.trim(), newPromptTags, newPromptModelId);
+    await createPrompt({
+      name: newPromptTitle.trim(),
+      description: newPromptGoal.trim(),
+      tags: newPromptTags,
+      modelId: newPromptModelId
+    });
     setIsAddPromptOpen(false);
     
     // Reset form
