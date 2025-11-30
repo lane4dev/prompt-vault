@@ -1,13 +1,13 @@
 {
-  "displayName": "My Electron App",
-  "name": "my-electron-app",
-  "description": "Your awesome app description",
-  "version": "0.0.0",
+  "displayName": "Prompt Shelter",
+  "name": "prompt-shelter",
+  "description": "An Electron-based application to manage and organize AI prompts efficiently.",
+  "version": "0.1.0",
   "main": "./node_modules/.dev/main/index.mjs",
   "resources": "src/resources",
   "author": {
-    "name": "Dalton Menezes",
-    "email": "daltonmenezes@outlook.com"
+    "name": "Lane Tang",
+    "email": "dev@tangyu.me"
   },
   "license": "MIT",
   "packageManager": "pnpm@10.0.0",
@@ -59,7 +59,8 @@
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^13.0.0",
-    "zod": "^4.1.13"
+    "zod": "^4.1.13",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.7",
