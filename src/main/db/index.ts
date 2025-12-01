@@ -3,6 +3,7 @@ import { app } from 'electron';
 import { join, dirname } from 'path';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
 import * as schema from '../../shared/db/schema';
 import { randomUUID } from 'crypto';
@@ -25,85 +26,27 @@ sqlite.pragma('journal_mode = WAL');
 
 export const db = drizzle(sqlite, { schema });
 
-// --- Schema Initialization ---
-function initSchema() {
-  const sql = `
-    CREATE TABLE IF NOT EXISTS \`models\` (
-      \`id\` text PRIMARY KEY NOT NULL,
-      \`name\` text NOT NULL,
-      \`provider\` text NOT NULL,
-      \`context_window\` integer NOT NULL,
-      \`max_output_tokens\` integer,
-      \`is_active\` integer DEFAULT true
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS \`models_name_unique\` ON \`models\` (\`name\`);
-    
-    CREATE TABLE IF NOT EXISTS \`prompts\` (
-      \`id\` text PRIMARY KEY NOT NULL,
-      \`name\` text NOT NULL,
-      \`description\` text,
-      \`current_content\` text DEFAULT '',
-      \`current_model_id\` text,
-      \`current_temperature\` real DEFAULT 0.7,
-      \`current_token_limit\` integer DEFAULT 2000,
-      \`current_top_k\` integer,
-      \`current_top_p\` real,
-      \`is_favorite\` integer DEFAULT false,
-      \`is_archived\` integer DEFAULT false,
-      \`created_at\` integer DEFAULT (unixepoch()) NOT NULL,
-      \`updated_at\` integer DEFAULT (unixepoch()) NOT NULL,
-      FOREIGN KEY (\`current_model_id\`) REFERENCES \`models\`(\`id\`) ON UPDATE no action ON DELETE no action
-    );
-    
-    CREATE TABLE IF NOT EXISTS \`prompt_versions\` (
-      \`id\` text PRIMARY KEY NOT NULL,
-      \`prompt_id\` text NOT NULL,
-      \`version_number\` integer NOT NULL,
-      \`label\` text,
-      \`content\` text NOT NULL,
-      \`model_id\` text,
-      \`temperature\` real,
-      \`token_limit\` integer,
-      \`top_k\` integer,
-      \`top_p\` real,
-      \`is_major_version\` integer DEFAULT true NOT NULL,
-      \`note\` text,
-      \`created_at\` integer DEFAULT (unixepoch()) NOT NULL,
-      FOREIGN KEY (\`prompt_id\`) REFERENCES \`prompts\`(\`id\`) ON UPDATE no action ON DELETE cascade,
-      FOREIGN KEY (\`model_id\`) REFERENCES \`models\`(\`id\`) ON UPDATE no action ON DELETE no action
-    );
-    
-    CREATE TABLE IF NOT EXISTS \`output_samples\` (
-      \`id\` text PRIMARY KEY NOT NULL,
-      \`version_id\` text NOT NULL,
-      \`name\` text NOT NULL,
-      \`content\` text NOT NULL,
-      \`created_at\` integer DEFAULT (unixepoch()) NOT NULL,
-      FOREIGN KEY (\`version_id\`) REFERENCES \`prompt_versions\`(\`id\`) ON UPDATE no action ON DELETE cascade
-    );
-    
-    CREATE TABLE IF NOT EXISTS \`tags\` (
-      \`id\` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-      \`name\` text NOT NULL,
-      \`color\` text
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS \`tags_name_unique\` ON \`tags\` (\`name\`);
-    
-    CREATE TABLE IF NOT EXISTS \`prompts_to_tags\` (
-      \`prompt_id\` text NOT NULL,
-      \`tag_id\` integer NOT NULL,
-      PRIMARY KEY(\`prompt_id\`, \`tag_id\`),
-      FOREIGN KEY (\`prompt_id\`) REFERENCES \`prompts\`(\`id\`) ON UPDATE no action ON DELETE cascade,
-      FOREIGN KEY (\`tag_id\`) REFERENCES \`tags\`(\`id\`) ON UPDATE no action ON DELETE cascade
-    );
-  `;
+// --- Migration Logic ---
+function runMigrations() {
+  let migrationsFolder = join(process.cwd(), 'drizzle');
   
-  sqlite.exec(sql);
+  if (app.isPackaged) {
+    migrationsFolder = join(process.resourcesPath, 'drizzle');
+  }
+
+  console.log('Running migrations from:', migrationsFolder);
+
+  try {
+    migrate(db, { migrationsFolder });
+    console.log('Database migration completed successfully.');
+  } catch (error) {
+    console.error('Database migration failed:', error);
+  }
 }
 
 // --- Seeding Logic ---
 async function seedDatabase() {
-  initSchema(); // Ensure tables exist
+  runMigrations(); // Ensure tables exist via migration
   const existingModels = await db.query.models.findMany();
   if (existingModels.length === 0) {
     console.log('Seeding initial models...');

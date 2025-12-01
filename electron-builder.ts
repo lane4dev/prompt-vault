@@ -30,6 +30,13 @@ export default {
     output: `dist/v${version}`,
   },
 
+  extraResources: [
+    {
+      from: 'drizzle',
+      to: 'drizzle',
+    },
+  ],
+
   mac: {
     artifactName,
     icon: `${resources}/build/icons/icon.icns`,
