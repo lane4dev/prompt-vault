@@ -317,6 +317,17 @@ src
 - **UI/UX 改进**:
   - **删除按钮样式**: 修复了亮色模式下删除按钮样式问题，正确实现了 `variant="destructive"`。
   - **Save 按钮状态**: 优化了 "Save" 按钮的可用状态逻辑。现在 `isModified` 会将当前 Draft 内容与 **当前选中的版本** 进行比对，而不是强制比对最新的 Major 版本。这解决了查看旧版本时 "Save" 按钮错误亮起的问题。
+  - **Output Samples 消失修复**: 重构了 `PromptDetailPane`，移除了多余的本地状态 (`versions`, `samples`)，改为直接从 Store 的 `selectedPromptDetail` 派生数据。这修复了编辑 Prompt 文本时因状态竞态导致 Output Samples 意外清空的严重 Bug。
+  - **Output Samples 编辑功能**: 实现了 Output Samples 的编辑和删除功能。通过打通 IPC 通道 (`UPDATE_OUTPUT_SAMPLE`, `DELETE_OUTPUT_SAMPLE`) 和 Zustand Store 的 Optimistic Update，现在用户可以对样本进行增删改查并持久化保存。
+  - **Preload Script Fix**: 在 `src/preload/index.ts` 中暴露了 `updateOutputSample` 和 `deleteOutputSample` 方法到渲染进程，解决了 `window.promptApi.updateOutputSample is not a function` 的错误。
+  - **文本框滚动条**: 为 Prompt 编辑器和 Output Samples 的 `Textarea` 组件添加了 `overflow-y-auto` 类，确保当内容超出可见区域时，会自动出现垂直滚动条，提升长文本的可用性。
+  - **Layout Refactor**: 重构了 `PromptDetailPane` 的 Flex 布局。移除了主区域的全局滚动，改为让编辑器区域 (`flex-1`) 自动填充剩余垂直空间。
+  - **Flexbox 溢出修复**: 为嵌套在 Flex/Grid 布局中的编辑器容器和 `Textarea` 组件添加了 `min-h-0`。这解决了 Flex item 默认不会收缩小于其内容高度的问题，确保了 `overflow-y-auto` 能够生效并显示内部滚动条，防止长文本撑破布局。
+  - **快捷键支持**: 添加了 `Ctrl-S` (Windows/Linux) 和 `Cmd-S` (macOS) 快捷键，允许用户快速触发保存操作 (仅当有未保存修改时生效)，并修复了 `ReferenceError`，确保 `useEffect` 在所有相关处理函数定义之后调用。
+  - **窗口状态持久化**: 实现了窗口大小和位置的自动保存与恢复。
+    - 新增 `src/main/windowState.ts` 模块处理本地 JSON 存储。
+    - 在主窗口关闭前保存当前位置和大小，启动时自动恢复。
+    - 设置了窗口最小尺寸限制 (`minWidth: 1000`, `minHeight: 600`) 以保证 UI 布局完整性。
 - **架构升级**:
   - **数据库迁移**: 引入了 Drizzle Migrations 机制。现在应用启动时会自动检查并执行 `drizzle/` 目录下的 SQL 迁移文件，替代了之前的硬编码 `initSchema`。这确保了未来版本更新时数据库结构的平滑过渡和数据安全。
   - **打包配置**: 更新了 `electron-builder` 配置，将 `drizzle` 文件夹作为 `extraResources` 打包，确保生产环境中迁移文件可用。
