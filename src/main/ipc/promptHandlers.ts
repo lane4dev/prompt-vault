@@ -343,6 +343,15 @@ export function registerPromptIpcHandlers() {
     };
   });
 
+  ipcMain.handle(IpcChannels.UPDATE_OUTPUT_SAMPLE, async (_event: IpcMainInvokeEvent, id: string, updates: Parameters<PromptApi['updateOutputSample']>[1]): Promise<void> => {
+    if (Object.keys(updates).length === 0) return;
+    await db.update(schema.outputSamples).set(updates).where(eq(schema.outputSamples.id, id));
+  });
+
+  ipcMain.handle(IpcChannels.DELETE_OUTPUT_SAMPLE, async (_event: IpcMainInvokeEvent, id: string): Promise<void> => {
+    await db.delete(schema.outputSamples).where(eq(schema.outputSamples.id, id));
+  });
+
   // --- Model Handlers --- 
   ipcMain.handle(IpcChannels.GET_ALL_MODELS, async (): Promise<IpcModel[]> => {
     const models = await db.query.models.findMany();

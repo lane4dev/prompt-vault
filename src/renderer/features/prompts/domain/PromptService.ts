@@ -69,6 +69,14 @@ export const PromptService = {
     );
   },
 
+  updateOutputSample: async (id: string, updates: { name?: string; content?: string }): Promise<void> => {
+    await window.promptApi.updateOutputSample(id, updates);
+  },
+
+  deleteOutputSample: async (id: string): Promise<void> => {
+    await window.promptApi.deleteOutputSample(id);
+  },
+
   getAllModels: async (): Promise<IpcModel[]> => {
     return await window.promptApi.getAllModels();
   }

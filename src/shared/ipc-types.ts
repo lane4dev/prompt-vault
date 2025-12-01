@@ -24,6 +24,8 @@ export const IpcChannels = {
   GET_APP_VERSION: 'app:get-version',
   // Output Samples
   CREATE_OUTPUT_SAMPLE: 'output-sample:create',
+  UPDATE_OUTPUT_SAMPLE: 'output-sample:update',
+  DELETE_OUTPUT_SAMPLE: 'output-sample:delete',
 } as const; // `as const` ensures string literal types
 
 export type IpcChannel = typeof IpcChannels[keyof typeof IpcChannels];
@@ -149,6 +151,16 @@ export interface PromptApi {
     name: string,
     content: string,
   ): Promise<IpcOutputSample>;
+
+  updateOutputSample(
+    id: string,
+    updates: {
+      name?: string;
+      content?: string;
+    }
+  ): Promise<void>;
+
+  deleteOutputSample(id: string): Promise<void>;
 
   copyToClipboard(text: string): Promise<void>;
 

@@ -31,6 +31,12 @@ const promptApi: PromptApi = {
   createOutputSample: (versionId, name, content) => 
     ipcRenderer.invoke(IpcChannels.CREATE_OUTPUT_SAMPLE, versionId, name, content),
 
+  updateOutputSample: (id, updates) => 
+    ipcRenderer.invoke(IpcChannels.UPDATE_OUTPUT_SAMPLE, id, updates),
+
+  deleteOutputSample: (id) => 
+    ipcRenderer.invoke(IpcChannels.DELETE_OUTPUT_SAMPLE, id),
+
   copyToClipboard: (text) => ipcRenderer.invoke(IpcChannels.COPY_TO_CLIPBOARD, text),
 
   getAppPath: (name) => ipcRenderer.invoke(IpcChannels.APP_GET_PATH, name),

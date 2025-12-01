@@ -28,6 +28,8 @@ interface PromptState {
   deletePromptVersion: (id: string, promptId: string) => Promise<void>;
 
   createOutputSample: (payload: CreateOutputSamplePayload) => Promise<IpcOutputSample>;
+  updateOutputSample: (id: string, updates: { name?: string; content?: string }) => Promise<void>;
+  deleteOutputSample: (id: string) => Promise<void>;
 
   fetchModels: () => Promise<void>;
 }
@@ -198,16 +200,65 @@ export const usePromptStore = create<PromptState>((set, get) => ({
     try {
       const newSample = await PromptService.createOutputSample(payload);
       
-      const currentId = get().selectedPromptId;
-      if (currentId) {
-        get().fetchPromptDetail(currentId);
-      }
+      // Update local state instead of full refetch for smoother UX
+      set((state) => {
+        if (!state.selectedPromptDetail) return state;
+        return {
+          selectedPromptDetail: {
+            ...state.selectedPromptDetail,
+            outputSamples: [...state.selectedPromptDetail.outputSamples, newSample]
+          }
+        };
+      });
       
       return newSample;
     } catch (err) {
       console.error("Failed to create output sample:", err);
       set({ error: "Failed to create output sample" });
       throw err;
+    }
+  },
+
+  updateOutputSample: async (id, updates) => {
+    try {
+      await PromptService.updateOutputSample(id, updates);
+      
+      // Optimistic update
+      set((state) => {
+        if (!state.selectedPromptDetail) return state;
+        return {
+          selectedPromptDetail: {
+            ...state.selectedPromptDetail,
+            outputSamples: state.selectedPromptDetail.outputSamples.map(s => 
+              s.id === id ? { ...s, ...updates } : s
+            )
+          }
+        };
+      });
+    } catch (err) {
+       console.error("Failed to update output sample:", err);
+       // Revert on failure (could implement fetching original state here)
+       get().fetchPromptDetail(get().selectedPromptId!);
+    }
+  },
+
+  deleteOutputSample: async (id) => {
+    try {
+      await PromptService.deleteOutputSample(id);
+      
+      // Optimistic update
+      set((state) => {
+        if (!state.selectedPromptDetail) return state;
+        return {
+          selectedPromptDetail: {
+            ...state.selectedPromptDetail,
+            outputSamples: state.selectedPromptDetail.outputSamples.filter(s => s.id !== id)
+          }
+        };
+      });
+    } catch (err) {
+       console.error("Failed to delete output sample:", err);
+       get().fetchPromptDetail(get().selectedPromptId!);
     }
   },
 
