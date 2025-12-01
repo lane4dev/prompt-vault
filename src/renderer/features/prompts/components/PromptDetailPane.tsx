@@ -561,6 +561,21 @@ export function PromptDetailPane() {
     setVersionToRevert(null);
   };
 
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (isModified) {
+          handleSaveVersion();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isModified, handleSaveVersion]);
+
   // --- Render ---
 
   if (isLoadingDetail) {
