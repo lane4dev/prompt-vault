@@ -9,7 +9,7 @@
 
 **Prompt Vault** is a local-first, privacy-focused application designed for Prompt Engineers and LLM developers to systematically manage, version, and refine their prompt library.
 
-Built entirely using **Gemini CLI** following the **Vibe Code** philosophy, this project serves as a practical example of agentic coding—where human intent directs AI execution to build high-quality software.
+Built entirely using **Gemini CLI** following the **Vibe Coding** philosophy, this project serves as a practical example of agentic coding—where human intent directs AI execution to build high-quality software.
 
 The core design is heavily inspired by the **"Document the various prompt attempts"** methodology outlined in [Prompt Engineering](https://www.gptaiflow.com/assets/files/2025-01-18-pdf-1-TechAI-Goolge-whitepaper_Prompt%20Engineering_v4-af36dcc7a49bb7269a58b1c9b89a8ae1.pdf) by **Lee Boonstra**. Specifically, it digitalizes the workflow described in *Table 21: A template for documenting prompts*, solving the critical need to:
 
@@ -54,30 +54,39 @@ Instead of a static spreadsheet, Prompt Vault provides a dedicated, version-cont
 - **State Management**: [Zustand](https://github.com/pmndrs/zustand)
 - **Database**: [Better-SQLite3](https://github.com/WiseLibs/better-sqlite3) with [Drizzle ORM](https://orm.drizzle.team/)
 
-## 🚀 Getting Started
+## 📥 Download
+
+For end-users, the easiest way to get Prompt Vault is to download the latest pre-built package from the [GitHub Releases page](https://github.com/lane4dev/prompt-vault/releases).
+
+Available packages:
+-   **macOS**: `.dmg` or `.zip`
+-   **Windows**: `Setup.exe` or `portable.exe` or `.zip`
+-   **Linux**: `.AppImage`, `.deb`, `.rpm`
+
+## 💻 For Developers
+
+If you want to contribute, build from source, or customize the application, follow these steps:
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v20 or higher recommended)
+- [Node.js](https://nodejs.org/) (v22 or higher recommended)
 - [pnpm](https://pnpm.io/) (Project uses `pnpm` for package management)
 
-### Installation
-
-1. **Clone the repository**
+### 1. Clone the repository
    ```bash
-   git clone https://github.com/yourusername/prompt-vault.git
+   git clone https://github.com/lane4dev/prompt-vault.git
    cd prompt-vault
    ```
 
-2. **Install dependencies**
+### 2. Install dependencies
    ```bash
    pnpm install
    ```
 
-3. **Initialize the Database**
+### 3. Initialize the Database
    The application automatically sets up the local SQLite database on first run.
 
-### Development
+### 4. Development
 
 To start the app in development mode with hot-reloading:
 
@@ -85,7 +94,7 @@ To start the app in development mode with hot-reloading:
 pnpm dev
 ```
 
-### Build
+### 5. Build
 
 To build the application for production (creates an installer/executable):
 
