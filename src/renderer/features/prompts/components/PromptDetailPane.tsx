@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "renderer/components/ui/button";
 import { Input } from "renderer/components/ui/input";
 import { Label } from "renderer/components/ui/label";
@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "renderer/components/ui/select";
-import { Save, Copy, Clock, Pencil, Check, X, Plus, Trash2, Eye, Edit3, MoreHorizontal, ChevronDown, AlertTriangle } from "lucide-react";
+import { Save, Copy, Clock, Pencil, Check, X, Plus, Trash2, Eye, Edit3, MoreHorizontal, AlertTriangle } from "lucide-react";
 import { cn } from "renderer/lib/utils";
 import {
   DropdownMenu,
@@ -34,7 +34,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle as DialogTitleShadcn,
@@ -54,10 +53,9 @@ import {
   CommandItem,
 } from "renderer/components/ui/command";
 import { Checkbox } from "renderer/components/ui/checkbox";
-import { v4 as uuidv4 } from "uuid";
 
 import { PromptHistorySidebar } from "./PromptHistorySidebar";
-import { IpcPromptVersion, IpcOutputSample, IpcModel } from "shared/ipc-types";
+import { IpcPromptVersion, IpcOutputSample } from "shared/ipc-types";
 import { usePromptStore } from "renderer/stores/usePromptStore";
 
 const formatTokens = (num: number): string => {
@@ -91,9 +89,22 @@ export function PromptDetailPane() {
     fetchModels,
   } = usePromptStore();
 
-  // Local states for editable fields, synchronized with promptDetail
+  // --- Derived State (Single Source of Truth) ---
+  const versions = useMemo(() => promptDetail?.versions || [], [promptDetail]);
+  const activePromptId = promptDetail?.id;
+
+  // Local state for UI controls only
+  const [activeVersionId, setActiveVersionId] = useState<string | null>(null);
+  const [activeSampleId, setActiveSampleId] = useState<string | null>(null);
+  
+  // Ref to track if we've initialized the active version for the *current* prompt
+  const initializedPromptIdRef = useRef<string | null>(null);
+
+  // Editable Fields State (Sync with Active Version / Draft)
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempPromptName, setTempPromptName] = useState("");
+  
+  // These fields mirror the "Draft" state (prompts table)
   const [currentDescription, setCurrentDescription] = useState("");
   const [currentContent, setCurrentContent] = useState("");
   const [currentModelId, setCurrentModelId] = useState("");
@@ -101,38 +112,128 @@ export function PromptDetailPane() {
   const [currentTokenLimit, setCurrentTokenLimit] = useState<number | undefined>(2000);
   const [currentTopK, setCurrentTopK] = useState<number | undefined>(undefined);
   const [currentTopP, setCurrentTopP] = useState<number | undefined>(undefined);
-
-  // Tags Popover State
-  const [isTagsPopoverOpen, setIsTagsPopoverOpen] = useState(false);
   const [currentPromptTags, setCurrentPromptTags] = useState<string[]>([]);
 
-  // Prompt Version Management State
-  const [versions, setVersions] = useState<IpcPromptVersion[]>([]);
-  const [activeVersionId, setActiveVersionId] = useState<string | null>(null);
+  // UI Toggles
+  const [isTagsPopoverOpen, setIsTagsPopoverOpen] = useState(false);
   const [isRenamingVersion, setIsRenamingVersion] = useState(false);
   const [tempVersionName, setTempVersionName] = useState("");
   const [isDeletingVersion, setIsDeletingVersion] = useState(false);
-
-  // Output Samples Management State
-  const [samples, setSamples] = useState<IpcOutputSample[]>([]);
-  const [activeSampleId, setActiveSampleId] = useState<string | null>(null);
   const [outputMode, setOutputMode] = useState<'preview' | 'edit'>('preview');
-
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [promptMode, setPromptMode] = useState<'api' | 'chat'>('api');
-
-  // Revert Version State
   const [isRevertingVersion, setIsRevertingVersion] = useState(false);
   const [versionToRevert, setVersionToRevert] = useState<IpcPromptVersion | null>(null);
-
   const [isCopied, setIsCopied] = useState(false);
 
-  const handleCopyToClipboard = async () => {
-    if (!currentContent) return;
-    await window.promptApi.copyToClipboard(currentContent);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
+  // --- Initialization & Sync Logic ---
+
+  // 1. Fetch Models on mount
+  useEffect(() => {
+    fetchModels();
+  }, [fetchModels]);
+
+  // 2. Initialize or Update State when Prompt Changes
+  useEffect(() => {
+    if (!promptDetail) {
+      // Reset everything if no prompt selected
+      initializedPromptIdRef.current = null;
+      setActiveVersionId(null);
+      return;
+    }
+
+    // Is this a newly selected prompt?
+    if (initializedPromptIdRef.current !== promptDetail.id) {
+      // Initialize Draft State from Prompt (DB "Current" fields)
+      setTempPromptName(promptDetail.name);
+      setCurrentDescription(promptDetail.description);
+      setCurrentContent(promptDetail.currentContent);
+      setCurrentModelId(promptDetail.currentModelId || "");
+      setCurrentTemperature(promptDetail.currentTemperature);
+      setCurrentTokenLimit(promptDetail.currentTokenLimit);
+      setCurrentTopK(promptDetail.currentTopK);
+      setCurrentTopP(promptDetail.currentTopP);
+      setCurrentPromptTags(promptDetail.tags);
+
+      // Initialize Active Version
+      // Strategy: Find the latest Major version. If none, fallback to latest.
+      const majorVersions = promptDetail.versions.filter(v => v.isMajorVersion);
+      const latestMajor = majorVersions.length > 0 ? majorVersions[majorVersions.length - 1] : null;
+      const fallback = promptDetail.versions.length > 0 ? promptDetail.versions[promptDetail.versions.length - 1] : null;
+      const targetVersionId = latestMajor ? latestMajor.id : (fallback ? fallback.id : null);
+      
+      setActiveVersionId(targetVersionId);
+      
+      // Mark as initialized
+      initializedPromptIdRef.current = promptDetail.id;
+    } else {
+      // Prompt ID hasn't changed, but data might have (e.g., after save/update)
+      // Only update local state if it differs to avoid overwriting user typing
+      // Note: We deliberately DO NOT sync content/params here to avoid cursor jumps or losing unsaved edits
+      // The only exception is when we explicitly switch versions (handled in another effect)
+      
+      // Update Tags (usually safe to sync)
+      setCurrentPromptTags(promptDetail.tags);
+      setTempPromptName(promptDetail.name); // Sync name in case it changed externally
+    }
+  }, [promptDetail]);
+
+  // 3. Handle Active Version Switching
+  // When user clicks a tab, we load that version's data into the draft
+  const handleVersionTabChange = async (versionId: string) => {
+    if (!promptDetail) return;
+    
+    const targetVersion = versions.find(v => v.id === versionId);
+    if (!targetVersion) return;
+
+    setActiveVersionId(versionId);
+    
+    // Load version data into local state
+    setCurrentContent(targetVersion.content);
+    setCurrentModelId(targetVersion.modelId || "");
+    setCurrentTemperature(targetVersion.temperature || 0.7);
+    setCurrentTokenLimit(targetVersion.tokenLimit);
+    setCurrentTopK(targetVersion.topK);
+    setCurrentTopP(targetVersion.topP);
+
+    // Sync with DB "Draft" state
+    await updatePrompt(promptDetail.id, {
+      currentContent: targetVersion.content,
+      currentModelId: targetVersion.modelId || "",
+      currentTemperature: targetVersion.temperature || 0.7,
+      currentTokenLimit: targetVersion.tokenLimit || undefined,
+      currentTopK: targetVersion.topK || undefined,
+      currentTopP: targetVersion.topP || undefined
+    });
   };
+
+  // --- Derived Calculations ---
+
+  const activeVersion = useMemo(() => 
+    versions.find(v => v.id === activeVersionId), 
+    [versions, activeVersionId]
+  );
+
+  const samples = useMemo(() => {
+    if (!promptDetail || !activeVersionId) return [];
+    return promptDetail.outputSamples.filter(s => s.versionId === activeVersionId);
+  }, [promptDetail, activeVersionId]);
+
+  // Ensure activeSampleId is valid for current list
+  useEffect(() => {
+    if (samples.length > 0) {
+      if (!activeSampleId || !samples.find(s => s.id === activeSampleId)) {
+        setActiveSampleId(samples[0].id);
+      }
+    } else {
+      setActiveSampleId(null);
+    }
+  }, [samples, activeSampleId]);
+
+  const activeSample = useMemo(() => 
+    samples.find(s => s.id === activeSampleId),
+    [samples, activeSampleId]
+  );
 
   const selectedModel = useMemo(() => {
     return allModels.find(m => m.id === currentModelId);
@@ -163,108 +264,10 @@ export function PromptDetailPane() {
     return { isTokenLimitExceedingContext, isPromptExceedingTokenLimit, isPromptExceedingContext };
   }, [promptMode, currentTokenLimit, modelContextWindow, currentPromptTokens]);
 
-  // --- Data Fetching & Synchronization --- //
-  useEffect(() => {
-    fetchModels();
-  }, [fetchModels]);
-
-  useEffect(() => {
-    if (promptDetail) {
-      setTempPromptName(promptDetail.name);
-      setCurrentDescription(promptDetail.description);
-      setCurrentContent(promptDetail.currentContent);
-      setCurrentModelId(promptDetail.currentModelId || "");
-      setCurrentTemperature(promptDetail.currentTemperature);
-      setCurrentTokenLimit(promptDetail.currentTokenLimit);
-      setCurrentTopK(promptDetail.currentTopK);
-      setCurrentTopP(promptDetail.currentTopP);
-      setCurrentPromptTags(promptDetail.tags);
-      setVersions(promptDetail.versions);
-
-      // Initialize active version if not already set or if switching prompts
-      const versionExists = activeVersionId && promptDetail.versions.some(v => v.id === activeVersionId);
-      
-      if (!versionExists) {
-          const majorVersions = promptDetail.versions.filter(v => v.isMajorVersion);
-          const latestMajor = majorVersions.length > 0 ? majorVersions[majorVersions.length - 1] : null;
-          const fallback = promptDetail.versions.length > 0 ? promptDetail.versions[promptDetail.versions.length - 1] : null;
-          const targetId = latestMajor ? latestMajor.id : (fallback ? fallback.id : null);
-          setActiveVersionId(targetId);
-
-           if (targetId) {
-            const versionSamples = promptDetail.outputSamples.filter(s => s.versionId === targetId);
-            setSamples(versionSamples);
-            setActiveSampleId(versionSamples.length > 0 ? versionSamples[0].id : null);
-          } else {
-            setSamples([]);
-            setActiveSampleId(null);
-          }
-      } else {
-        // Just update samples for the current active version if data refreshed
-        const versionSamples = promptDetail.outputSamples.filter(s => s.versionId === activeVersionId);
-        setSamples(versionSamples);
-        // Ensure active sample is still valid
-        if (activeSampleId && !versionSamples.some(s => s.id === activeSampleId)) {
-             setActiveSampleId(versionSamples.length > 0 ? versionSamples[0].id : null);
-        }
-      }
-    } else {
-      // Reset if prompt deleted or none selected
-      setTempPromptName("");
-      setCurrentDescription("");
-      setCurrentContent("");
-      setCurrentModelId("");
-      setCurrentTemperature(0.7);
-      setCurrentTokenLimit(2000);
-      setCurrentTopK(undefined);
-      setCurrentTopP(undefined);
-      setCurrentPromptTags([]);
-      setVersions([]);
-      setActiveVersionId(null);
-      setSamples([]);
-      setActiveSampleId(null);
-    }
-  }, [promptDetail]);
-
-  // Update samples when activeVersionId changes (handled by the effect above partially, but needed for manual switching)
-  useEffect(() => {
-    if (!promptDetail) return; // Ensure promptDetail is loaded
-    
-    // If activeVersionId changed, we need to load its content into the "Draft" area
-    const selectedVersion = versions.find(v => v.id === activeVersionId);
-
-    if (selectedVersion) {
-      // 1. Update local states from selected version
-      setCurrentContent(selectedVersion.content);
-      setCurrentModelId(selectedVersion.modelId || "");
-      setCurrentTemperature(selectedVersion.temperature || 0.7);
-      setCurrentTokenLimit(selectedVersion.tokenLimit);
-      setCurrentTopK(selectedVersion.topK);
-      setCurrentTopP(selectedVersion.topP);
-
-      // 2. Update database 'current' fields via IPC to reflect the switch
-      updatePrompt(promptDetail.id, {
-        currentContent: selectedVersion.content,
-        currentModelId: selectedVersion.modelId || "",
-        currentTemperature: selectedVersion.temperature || 0.7,
-        currentTokenLimit: selectedVersion.tokenLimit || undefined,
-        currentTopK: selectedVersion.topK || undefined,
-        currentTopP: selectedVersion.topP || undefined
-      });
-
-      // 3. Update samples for the selected version
-      const versionSamples = promptDetail.outputSamples.filter(s => s.versionId === selectedVersion.id);
-      setSamples(versionSamples);
-      setActiveSampleId(versionSamples.length > 0 ? versionSamples[0].id : null);
-    }
-  }, [activeVersionId]); 
-
   const isModified = useMemo(() => {
     if (!promptDetail) return false;
 
     // Use the currently active version as the baseline for comparison
-    const activeVersion = versions.find(v => v.id === activeVersionId);
-    
     // If no active version is selected (rare), fallback to the latest major version
     const baselineVersion = activeVersion || versions.filter(v => v.isMajorVersion).pop();
 
@@ -285,7 +288,7 @@ export function PromptDetailPane() {
   }, [
     promptDetail,
     versions,
-    activeVersionId,
+    activeVersion, // use derived activeVersion
     currentContent,
     currentModelId,
     currentTemperature,
@@ -294,7 +297,16 @@ export function PromptDetailPane() {
     currentTopP
   ]);
 
-  // --- Handlers --- //
+
+  // --- Action Handlers ---
+
+  const handleCopyToClipboard = async () => {
+    if (!currentContent) return;
+    await window.promptApi.copyToClipboard(currentContent);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
+
   const handleSaveName = async () => {
     if (promptDetail && tempPromptName.trim() !== promptDetail.name) {
       await updatePrompt(promptDetail.id, { name: tempPromptName.trim() });
@@ -316,15 +328,12 @@ export function PromptDetailPane() {
     await updatePrompt(promptDetail.id, { tags: newTags });
   };
 
-  const activeVersion = versions.find(v => v.id === activeVersionId);
-  const activeSample = samples.find(s => s.id === activeSampleId);
-
   const handleAddVersion = async () => {
     if (!promptDetail) return;
     try {
       const newVersion = await createPromptVersion({
         promptId: promptDetail.id,
-        label: "", // Let backend generate label based on version number
+        label: "", // Let backend generate label
         content: currentContent,
         modelId: currentModelId,
         temperature: currentTemperature,
@@ -364,36 +373,35 @@ export function PromptDetailPane() {
   };
 
   const handleRenameVersion = () => {
-    // TODO: Implement IPC
-    if (activeVersion && tempVersionName.trim()) {
-      setVersions(versions.map(v =>
-        v.id === activeVersionId ? { ...v, label: tempVersionName.trim() } : v
-      ));
-      setIsRenamingVersion(false);
-      setTempVersionName("");
-    }
+    // TODO: Implement IPC logic for renaming
+    setIsRenamingVersion(false);
+    setTempVersionName("");
   };
 
   const handleDeleteVersion = async () => {
     if (!activeVersionId || !promptDetail) return;
 
     try {
-      // 1. Determine the next version to switch to
-      const newVersions = versions.filter(v => v.id !== activeVersionId);
-      const nextMajor = newVersions.filter(v => v.isMajorVersion);
+      // 1. Determine the next version to switch to BEFORE deleting
+      const remainingVersions = versions.filter(v => v.id !== activeVersionId);
+      const nextMajor = remainingVersions.filter(v => v.isMajorVersion);
       let nextVersion = null;
       
       if (nextMajor.length > 0) {
         nextVersion = nextMajor[nextMajor.length - 1];
-      } else if (newVersions.length > 0) {
-        nextVersion = newVersions[newVersions.length - 1];
+      } else if (remainingVersions.length > 0) {
+        nextVersion = remainingVersions[remainingVersions.length - 1];
       }
 
       // 2. Delete the version
       await deletePromptVersion(activeVersionId, promptDetail.id);
 
-      // 3. If there is a next version, sync the draft (prompts table) to it immediately
+      // 3. Sync Logic
       if (nextVersion) {
+         // Switch UI to next version immediately
+         setActiveVersionId(nextVersion.id);
+         
+         // Update DB Draft to match next version
          await updatePrompt(promptDetail.id, {
             currentContent: nextVersion.content,
             currentModelId: nextVersion.modelId || "",
@@ -402,7 +410,15 @@ export function PromptDetailPane() {
             currentTopK: nextVersion.topK || undefined,
             currentTopP: nextVersion.topP || undefined
          });
-         setActiveVersionId(nextVersion.id);
+         
+         // Update Local State
+         setCurrentContent(nextVersion.content);
+         setCurrentModelId(nextVersion.modelId || "");
+         setCurrentTemperature(nextVersion.temperature || 0.7);
+         setCurrentTokenLimit(nextVersion.tokenLimit);
+         setCurrentTopK(nextVersion.topK);
+         setCurrentTopP(nextVersion.topP);
+
       } else {
          setActiveVersionId(null);
       }
@@ -414,9 +430,11 @@ export function PromptDetailPane() {
     setIsDeletingVersion(false);
   };
 
+  // Immediate update handler for typing
   const handlePromptContentChange = async (newContent: string) => {
     if (!promptDetail) return;
     setCurrentContent(newContent);
+    // Debounce this in a real app, but for now simple update
     await updatePrompt(promptDetail.id, { currentContent: newContent });
   };
 
@@ -433,20 +451,23 @@ export function PromptDetailPane() {
     }
   };
 
-  const handleDeleteSample = (idToDelete: string) => {
-    // TODO: Implement IPC
-    const newSamples = samples.filter(s => s.id !== idToDelete);
-    setSamples(newSamples);
-    if (activeSampleId === idToDelete && newSamples.length > 0) {
-      setActiveSampleId(newSamples[newSamples.length - 1].id);
+  const handleDeleteSample = async (idToDelete: string) => {
+    // TODO: Implement confirmation?
+    await usePromptStore.getState().deleteOutputSample(idToDelete);
+    if (activeSampleId === idToDelete) {
+        // If we deleted the active sample, switch to the last one or null
+        const newSamples = samples.filter(s => s.id !== idToDelete);
+        setActiveSampleId(newSamples.length > 0 ? newSamples[newSamples.length - 1].id : null);
     }
   };
 
-  const handleSampleChange = (key: keyof IpcOutputSample, value: string) => {
-    // TODO: Implement IPC
-    setSamples(samples.map(s =>
-      s.id === activeSampleId ? { ...s, [key]: value } : s
-    ));
+  const handleSampleChange = async (key: keyof IpcOutputSample, value: string) => {
+    if (!activeSampleId) return;
+    
+    // Optimistic local update (though store handles it too, this might feel snappier for typing)
+    // Actually, let's rely on the store's optimistic update to avoid conflicting states
+    
+    await usePromptStore.getState().updateOutputSample(activeSampleId, { [key]: value });
   };
 
   const handleModelChange = async (value: string) => {
@@ -532,13 +553,15 @@ export function PromptDetailPane() {
 
     setIsRevertingVersion(false);
     setVersionToRevert(null);
-    setIsHistoryOpen(false); // Close history sidebar after revert
+    setIsHistoryOpen(false);
   };
 
   const handleRevertCancel = () => {
     setIsRevertingVersion(false);
     setVersionToRevert(null);
   };
+
+  // --- Render ---
 
   if (isLoadingDetail) {
     return (
@@ -614,7 +637,7 @@ export function PromptDetailPane() {
           {/* Centered Version Management Group */}
           <div className="flex flex-1 justify-center items-center px-4">
             <div className="flex items-center gap-1 rounded-md bg-muted/50 p-1">
-              <Tabs value={activeVersionId || ""} onValueChange={setActiveVersionId} className="h-10">
+              <Tabs value={activeVersionId || ""} onValueChange={handleVersionTabChange} className="h-10">
                 <TabsList>
                   {versions.filter(v => v.isMajorVersion).map((version) => (
                     <TabsTrigger key={version.id} value={version.id}>
@@ -719,96 +742,98 @@ export function PromptDetailPane() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-auto p-6 space-y-6">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden p-6 gap-6">
         {/* Metadata Form */}
-        <div className="grid grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <Label>Goal</Label>
-            <Input
-              placeholder="One sentence goal..."
-              value={currentDescription}
-              onChange={handleDescriptionChange}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Model</Label>
-            <div className="flex items-center gap-2">
-              <Select value={currentModelId || allModels[0]?.id || ""} onValueChange={handleModelChange}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Select model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {allModels
-                    .filter(m => m.isActive || m.id === currentModelId)
-                    .map((model) => (
-                      <SelectItem key={model.id} value={model.id}>
-                        {model.name} {model.isActive === false ? "(Inactive)" : ""}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              {selectedModel && (
-                <span className="text-sm text-muted-foreground whitespace-nowrap">
-                  ({formatTokens(selectedModel.contextWindow)} tokens)
-                </span>
-              )}
+        <div className="flex-shrink-0 flex flex-col gap-6">
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label>Goal</Label>
+              <Input
+                placeholder="One sentence goal..."
+                value={currentDescription}
+                onChange={handleDescriptionChange}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Model</Label>
+              <div className="flex items-center gap-2">
+                <Select value={currentModelId || allModels[0]?.id || ""} onValueChange={handleModelChange}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Select model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allModels
+                      .filter(m => m.isActive || m.id === currentModelId)
+                      .map((model) => (
+                        <SelectItem key={model.id} value={model.id}>
+                          {model.name} {model.isActive === false ? "(Inactive)" : ""}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {selectedModel && (
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">
+                    ({formatTokens(selectedModel.contextWindow)} tokens)
+                  </span>
+                )}
+              </div>
             </div>
           </div>
+
+          {promptMode === 'api' && (
+            <div className="grid grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label>Temperature</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={currentTemperature}
+                  onChange={handleTemperatureChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  Token Limit
+                  {isTokenLimitExceedingContext && (
+                     <span className="text-destructive" title="Token limit exceeds model context window">
+                       <AlertTriangle className="h-3 w-3" />
+                     </span>
+                  )}
+                </Label>
+                <Input
+                  type="number"
+                  value={currentTokenLimit}
+                  onChange={handleTokenLimitChange}
+                  className={cn(isTokenLimitExceedingContext && "border-yellow-500 focus-visible:ring-yellow-500")}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Top-K</Label>
+                <Input
+                  type="number"
+                  value={currentTopK || ""}
+                  onChange={handleTopKChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Top-P</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={currentTopP || ""}
+                  onChange={handleTopPChange}
+                />
+              </div>
+            </div>
+          )}
+          <Separator />
         </div>
 
-        {promptMode === 'api' && (
-          <div className="grid grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label>Temperature</Label>
-              <Input
-                type="number"
-                step="0.1"
-                value={currentTemperature}
-                onChange={handleTemperatureChange}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="flex items-center gap-1">
-                Token Limit
-                {isTokenLimitExceedingContext && (
-                   <span className="text-destructive" title="Token limit exceeds model context window">
-                     <AlertTriangle className="h-3 w-3" />
-                   </span>
-                )}
-              </Label>
-              <Input
-                type="number"
-                value={currentTokenLimit}
-                onChange={handleTokenLimitChange}
-                className={cn(isTokenLimitExceedingContext && "border-yellow-500 focus-visible:ring-yellow-500")}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Top-K</Label>
-              <Input
-                type="number"
-                value={currentTopK || ""}
-                onChange={handleTopKChange}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Top-P</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={currentTopP || ""}
-                onChange={handleTopPChange}
-              />
-            </div>
-          </div>
-        )}
-
-        <Separator />
         {/* Editor Area */}
-        <div className="grid grid-cols-2 gap-6 h-[500px]">
+        <div className="flex-1 grid grid-cols-2 gap-6 min-h-0">
           {/* Prompt Editor */}
-          <div className={cn("flex flex-col gap-2 h-full border rounded-md p-2 bg-muted/10 transition-colors", (isPromptExceedingTokenLimit || isPromptExceedingContext) && "border-yellow-500 bg-yellow-500/5")}>
-            <div className="flex items-center justify-between">
+          <div className={cn("flex flex-col gap-2 h-full min-h-0 border rounded-md p-2 bg-muted/10 transition-colors", (isPromptExceedingTokenLimit || isPromptExceedingContext) && "border-yellow-500 bg-yellow-500/5")}>
+            <div className="flex items-center justify-between flex-shrink-0">
               <Label className="text-base font-semibold">Prompt</Label>
               <div className="flex items-center gap-2">
                  <span className={cn("text-xs text-muted-foreground font-mono", (isPromptExceedingTokenLimit || isPromptExceedingContext) && "text-destructive font-bold")}>
@@ -820,15 +845,15 @@ export function PromptDetailPane() {
               </div>
             </div>
             <Textarea
-              className={cn("flex-1 font-mono text-sm resize-none focus-visible:ring-0 bg-transparent border-none p-0 shadow-none")}
+              className={cn("flex-1 min-h-0 font-mono text-sm resize-none focus-visible:ring-0 bg-transparent border-none p-0 shadow-none overflow-y-auto")}
               placeholder="Enter your system prompt here..."
               value={currentContent}
               onChange={(e) => handlePromptContentChange(e.target.value)}
             />
           </div>
           {/* Output Samples Area */}
-          <div className="flex flex-col gap-2 h-full border rounded-md p-2 bg-muted/10">
-            <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-col gap-2 h-full min-h-0 border rounded-md p-2 bg-muted/10">
+            <div className="flex items-center justify-between mb-2 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <Label className="text-base font-semibold">Output Samples</Label>
               </div>
@@ -853,9 +878,9 @@ export function PromptDetailPane() {
               </div>
             </div>
             {/* Content Logic based on Mode */}
-            <div className="flex flex-col gap-2 flex-1">
+            <div className="flex flex-col gap-2 flex-1 min-h-0">
               {/* Sample List / Tabs */}
-              <div className="flex gap-1 overflow-x-auto pb-1 items-center">
+              <div className="flex gap-1 overflow-x-auto pb-1 items-center flex-shrink-0">
                 {samples.map((sample) => (
                   <button
                     key={sample.id}
@@ -878,9 +903,9 @@ export function PromptDetailPane() {
               </div>
               {/* Active Sample Content */}
               {activeSample ? (
-                <div className="flex flex-col gap-2 flex-1">
+                <div className="flex flex-col gap-2 flex-1 min-h-0">
                   {outputMode === 'edit' && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <Input
                         value={activeSample.name}
                         onChange={(e) => handleSampleChange('name', e.target.value)}
@@ -902,7 +927,7 @@ export function PromptDetailPane() {
                     onChange={(e) => handleSampleChange('content', e.target.value)}
                     readOnly={outputMode === 'preview'}
                     className={cn(
-                      "flex-1 font-mono text-sm resize-none",
+                      "flex-1 min-h-0 font-mono text-sm resize-none overflow-y-auto",
                       outputMode === 'preview' && "bg-muted/30 focus-visible:ring-0"
                     )}
                     placeholder="Paste or write an example output here..."
