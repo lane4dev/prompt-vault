@@ -64,6 +64,7 @@ export function registerPromptIpcHandlers() {
       tokenLimit: v.tokenLimit || undefined,
       topK: v.topK || undefined,
       topP: v.topP || undefined,
+      mode: v.mode || 'api',
       isMajorVersion: v.isMajorVersion,
       createdAt: v.createdAt.getTime(),
       note: v.note || undefined,
@@ -89,6 +90,7 @@ export function registerPromptIpcHandlers() {
       currentTokenLimit: prompt.currentTokenLimit || undefined,
       currentTopK: prompt.currentTopK || undefined,
       currentTopP: prompt.currentTopP || undefined,
+      currentMode: prompt.currentMode || 'api',
       isFavorite: prompt.isFavorite,
       isArchived: prompt.isArchived,
       tags,
@@ -168,7 +170,7 @@ export function registerPromptIpcHandlers() {
   });
 
   ipcMain.handle(IpcChannels.UPDATE_PROMPT, async (_event: IpcMainInvokeEvent, id: string, updates: Parameters<PromptApi['updatePrompt']>[1]): Promise<void> => {
-    const metadataKeys = ['name', 'description', 'isFavorite', 'isArchived'];
+    const metadataKeys = ['name', 'description', 'isFavorite', 'isArchived', 'currentMode'];
     const hasMetadataUpdate = Object.keys(updates).some(key => metadataKeys.includes(key));
     
     // Convert undefined to null for Drizzle to set fields to NULL
@@ -222,6 +224,7 @@ export function registerPromptIpcHandlers() {
     tokenLimit: number | undefined,
     topK: number | undefined,
     topP: number | undefined,
+    mode: 'api' | 'chat',
     note: string | undefined,
     isMajorVersion: boolean,
     copySamplesFromVersionId?: string,
@@ -248,12 +251,13 @@ export function registerPromptIpcHandlers() {
       versionNumber: newVersionNumber,
       label: label || `v${newVersionNumber}`,
       content,
-      modelId,
-      temperature,
-      tokenLimit,
-      topK,
-      topP,
-      note,
+      modelId: modelId || null,
+      temperature: temperature ?? 0.7,
+      tokenLimit: tokenLimit ?? 1000,
+      topK: topK ?? 40,
+      topP: topP ?? 0.9,
+      mode: mode || 'api',
+      note: note || null,
       isMajorVersion,
       createdAt: now,
     });

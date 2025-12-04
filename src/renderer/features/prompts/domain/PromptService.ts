@@ -50,6 +50,7 @@ export const PromptService = {
       payload.tokenLimit,
       payload.topK,
       payload.topP,
+      payload.mode || 'api',
       payload.note,
       payload.isMajorVersion,
       payload.copySamplesFromVersionId,

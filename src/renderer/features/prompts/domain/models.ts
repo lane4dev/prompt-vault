@@ -7,6 +7,7 @@ export interface UpdatePromptPayload {
   currentTokenLimit?: number;
   currentTopK?: number;
   currentTopP?: number;
+  currentMode?: 'api' | 'chat';
   tags?: string[];
   isFavorite?: boolean;
   isArchived?: boolean;
@@ -21,6 +22,7 @@ export interface CreateVersionPayload {
   tokenLimit?: number;
   topK?: number;
   topP?: number;
+  mode?: 'api' | 'chat';
   note?: string;
   isMajorVersion: boolean;
   copySamplesFromVersionId?: string;

@@ -23,8 +23,8 @@ const promptApi: PromptApi = {
   getAllTags: () => ipcRenderer.invoke(IpcChannels.GET_ALL_TAGS),
   addTag: (name) => ipcRenderer.invoke(IpcChannels.ADD_TAG, name),
 
-  createPromptVersion: (promptId, label, content, modelId, temperature, tokenLimit, topK, topP, note, isMajorVersion, copySamplesFromVersionId, archivePreviousVersionId) => 
-    ipcRenderer.invoke(IpcChannels.CREATE_PROMPT_VERSION, promptId, label, content, modelId, temperature, tokenLimit, topK, topP, note, isMajorVersion, copySamplesFromVersionId, archivePreviousVersionId),
+  createPromptVersion: (promptId, label, content, modelId, temperature, tokenLimit, topK, topP, mode, note, isMajorVersion, copySamplesFromVersionId, archivePreviousVersionId) => 
+    ipcRenderer.invoke(IpcChannels.CREATE_PROMPT_VERSION, promptId, label, content, modelId, temperature, tokenLimit, topK, topP, mode, note, isMajorVersion, copySamplesFromVersionId, archivePreviousVersionId),
 
   deletePromptVersion: (id) => ipcRenderer.invoke(IpcChannels.DELETE_PROMPT_VERSION, id),
 

@@ -21,12 +21,11 @@ export const prompts = sqliteTable('prompts', {
   currentContent: text('current_content').default(''),
   currentModelId: text('current_model_id').references(() => models.id),
   currentTemperature: real('current_temperature').default(0.7),
-  currentTokenLimit: integer('current_token_limit').default(2000),
-  currentTopK: integer('current_top_k'),
-  currentTopP: real('current_top_p'),
-
+  currentTokenLimit: integer('current_token_limit').default(1000),
+  currentTopK: integer('current_top_k').default(40),
+  currentTopP: real('current_top_p').default(0.9),
+  currentMode: text('current_mode').default('api').notNull(),
   isFavorite: integer('is_favorite', { mode: 'boolean' }).default(false).notNull(),
-
   isArchived: integer('is_archived', { mode: 'boolean' }).default(false).notNull(),
 
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
@@ -45,13 +44,14 @@ export const promptVersions = sqliteTable('prompt_versions', {
   // Snapshot Data
   content: text('content').notNull(),
   modelId: text('model_id').references(() => models.id),
-  temperature: real('temperature'),
-  tokenLimit: integer('token_limit'),
-  topK: integer('top_k'),
-  topP: real('top_p'),
-
+  temperature: real('temperature').notNull(),
+  tokenLimit: integer('token_limit').notNull(),
+  topK: integer('top_k').notNull(),
+  topP: real('top_p').notNull(),
+  mode: text('mode').default('api').notNull(),
+  note: text('note'),
+  
   isMajorVersion: integer('is_major_version', { mode: 'boolean' }).default(true).notNull(),
-  note: text('note'), // Optional commit message
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 });
 

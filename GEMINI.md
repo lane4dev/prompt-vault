@@ -287,11 +287,11 @@ src
   - 通过 Props (`onUpdatePromptTags` 等) 将子组件变更传递回顶层。
 
 ## 2025-11-30 (近期开发)
-- **数据管理与持久化**:
-  - 实现了基本的 CRUD 操作和 Drizzle 数据库 Schema 定义。
-  - 优化了 `UPDATE_PROMPT` 的 Drizzle 类型处理，并修正了默认内容逻辑。
-- **版本控制与保存机制**:
-  - 实现了版本管理功能（'Draft' vs 'Snapshot'）。
+  - **数据管理与持久化**:
+    - 实现了基本的 CRUD 操作和 Drizzle 数据库 Schema 定义。
+    - 优化了 `UPDATE_PROMPT` 的 Drizzle 类型处理，并修正了默认内容逻辑。
+    - **Prompt Mode 持久化**: 在 `prompts` 表中添加 `currentMode` 字段（TEXT, default 'api'），在 `promptVersions` 表中添加 `mode` 字段（TEXT, default 'api'）。用户切换 Mode 会即时更新 `prompts.currentMode`，点击 "Save" 时会将当前的 Mode 写入 `prompt_versions.mode`。
+- **版本控制与保存机制**:  - 实现了版本管理功能（'Draft' vs 'Snapshot'）。
   - 改进了 'Save' 逻辑，通过归档当前主要版本并创建新版本来避免重复的 Tab 条目。
   - 实现了 'Save' 按钮在无实质性内容或参数更改时自动禁用。
   - 实现了版本回溯功能，允许用户从历史记录中恢复到任意版本。
@@ -314,26 +314,47 @@ src
   - **版本删除**: 修复了删除主版本后，关联的 Snapshot（历史记录）未被删除导致 "Zombie History" 的问题。现在后端 `DELETE_PROMPT_VERSION` 会级联删除所有同 `label` 的版本。
   - **版本创建**: 修复了新建版本时 `label` 可能重复的问题。现在完全依赖后端的单调递增 `versionNumber` 逻辑来生成唯一的默认 `label`。
   - **内容同步 (Draft Sync)**: 修复了删除版本后，Prompt 详情页内容未更新（仍显示已删除版本内容）的 Bug。通过在前端删除后显式调用 `updatePrompt` 强制同步 Draft 状态。
-- **UI/UX 改进**:
-  - **删除按钮样式**: 修复了亮色模式下删除按钮样式问题，正确实现了 `variant="destructive"`。
-  - **Save 按钮状态**: 优化了 "Save" 按钮的可用状态逻辑。现在 `isModified` 会将当前 Draft 内容与 **当前选中的版本** 进行比对，而不是强制比对最新的 Major 版本。这解决了查看旧版本时 "Save" 按钮错误亮起的问题。
-  - **Output Samples 消失修复**: 重构了 `PromptDetailPane`，移除了多余的本地状态 (`versions`, `samples`)，改为直接从 Store 的 `selectedPromptDetail` 派生数据。这修复了编辑 Prompt 文本时因状态竞态导致 Output Samples 意外清空的严重 Bug。
-  - **Output Samples 编辑功能**: 实现了 Output Samples 的编辑和删除功能。通过打通 IPC 通道 (`UPDATE_OUTPUT_SAMPLE`, `DELETE_OUTPUT_SAMPLE`) 和 Zustand Store 的 Optimistic Update，现在用户可以对样本进行增删改查并持久化保存。
-  - **Preload Script Fix**: 在 `src/preload/index.ts` 中暴露了 `updateOutputSample` 和 `deleteOutputSample` 方法到渲染进程，解决了 `window.promptApi.updateOutputSample is not a function` 的错误。
-  - **文本框滚动条**: 为 Prompt 编辑器和 Output Samples 的 `Textarea` 组件添加了 `overflow-y-auto` 类，确保当内容超出可见区域时，会自动出现垂直滚动条，提升长文本的可用性。
-  - **Layout Refactor**: 重构了 `PromptDetailPane` 的 Flex 布局。移除了主区域的全局滚动，改为让编辑器区域 (`flex-1`) 自动填充剩余垂直空间。
-  - **Flexbox 溢出修复**: 为嵌套在 Flex/Grid 布局中的编辑器容器和 `Textarea` 组件添加了 `min-h-0`。这解决了 Flex item 默认不会收缩小于其内容高度的问题，确保了 `overflow-y-auto` 能够生效并显示内部滚动条，防止长文本撑破布局。
-  - **快捷键支持**: 添加了 `Ctrl-S` (Windows/Linux) 和 `Cmd-S` (macOS) 快捷键，允许用户快速触发保存操作 (仅当有未保存修改时生效)，并修复了 `ReferenceError`，确保 `useEffect` 在所有相关处理函数定义之后调用。
-  - **窗口状态持久化**: 实现了窗口大小和位置的自动保存与恢复。
-    - 新增 `src/main/windowState.ts` 模块处理本地 JSON 存储。
-    - 在主窗口关闭前保存当前位置和大小，启动时自动恢复。
-    - 设置了窗口最小尺寸限制 (`minWidth: 1000`, `minHeight: 600`) 以保证 UI 布局完整性。
-- **架构升级**:
-  - **数据库迁移**: 引入了 Drizzle Migrations 机制。现在应用启动时会自动检查并执行 `drizzle/` 目录下的 SQL 迁移文件，替代了之前的硬编码 `initSchema`。这确保了未来版本更新时数据库结构的平滑过渡和数据安全。
-  - **打包配置**: 更新了 `electron-builder` 配置，将 `drizzle` 文件夹作为 `extraResources` 打包，确保生产环境中迁移文件可用。
+  - **UI/UX 改进**:
+    - **删除按钮样式**: 修复了亮色模式下删除按钮样式问题，正确实现了 `variant="destructive"`。
+    - **Save 按钮状态**: 优化了 "Save" 按钮的可用状态逻辑。现在 `isModified` 会将当前 Draft 内容与 **当前选中的版本** 进行比对，而不是强制比对最新的 Major 版本。这解决了查看旧版本时 "Save" 按钮错误亮起的问题。
+    - **Output Samples 消失修复**: 重构了 `PromptDetailPane`，移除了多余的本地状态 (`versions`, `samples`)，改为直接从 Store 的 `selectedPromptDetail` 派生数据。这修复了编辑 Prompt 文本时因状态竞态导致 Output Samples 意外清空的严重 Bug。
+    - **Output Samples 编辑功能**: 实现了 Output Samples 的编辑和删除功能。通过打通 IPC 通道 (`UPDATE_OUTPUT_SAMPLE`, `DELETE_OUTPUT_SAMPLE`) 和 Zustand Store 的 Optimistic Update，现在用户可以对样本进行增删改查并持久化保存。
+    - **Preload Script Fix**: 在 `src/preload/index.ts` 中暴露了 `updateOutputSample` 和 `deleteOutputSample` 方法到渲染进程，解决了 `window.promptApi.updateOutputSample is not a function` 的错误。
+    - **文本框滚动条**: 为 Prompt 编辑器和 Output Samples 的 `Textarea` 组件添加了 `overflow-y-auto` 类，确保当内容超出可见区域时，会自动出现垂直滚动条，提升长文本的可用性。
+    - **Layout Refactor**: 重构了 `PromptDetailPane` 的 Flex 布局。移除了主区域的全局滚动，改为让编辑器区域 (`flex-1`) 自动填充剩余垂直空间。
+    - **Flexbox 溢出修复**: 为嵌套在 Flex/Grid 布局中的编辑器容器和 `Textarea` 组件添加了 `min-h-0`。这解决了 Flex item 默认不会收缩小于其内容高度的问题，确保了 `overflow-y-auto` 能够生效并显示内部滚动条，防止长文本撑破布局。
+    - **快捷键支持**: 添加了 `Ctrl-S` (Windows/Linux) 和 `Cmd-S` (macOS) 快捷键，允许用户快速触发保存操作 (仅当有未保存修改时生效)，并修复了 `ReferenceError`，确保 `useEffect` 在所有相关处理函数定义之后调用。
+    - **窗口状态持久化**: 实现了窗口大小和位置的自动保存与恢复。
+      - 新增 `src/main/windowState.ts` 模块处理本地 JSON 存储。
+      - 在主窗口关闭前保存当前位置和大小，启动时自动恢复。
+      - 设置了窗口最小尺寸限制 (`minWidth: 1000`, `minHeight: 600`) 以保证 UI 布局完整性。
 
-**Next Steps**:
-- 实现实际的 AI API 集成（目前是模拟/占位符参数）。
+## 2025-12-04 (Bug Fixes & Refinements)
+- **版本管理逻辑修复**:
+    - **JSX 语法修复**: 修复了 `PromptDetailPane.tsx` 中 `onValueChange` 属性中内联函数定义导致的 JSX 语法错误，将 `handlePromptModeChange` 函数提取到组件主体中。
+    - **ReferenceError 修复**: 修复了 `PromptDetailPane.tsx` 中 `selectedVersion` 未定义的 `ReferenceError`，将其替换为正确的 `activeVersion`。
+    - **初始化顺序修复**: 修复了 `PromptDetailPane.tsx` 中 `promptMode` 引用 `activeVersion` 导致的 `ReferenceError`，将 `promptMode` 的定义移动到 `activeVersion` 之后。
+    - **循环依赖修复**: 修复了 `PromptDetailPane.tsx` 中 `promptMode` 与 `isTokenLimitExceedingContext` 之间循环引用导致的 `ReferenceError`，调整了代码块的定义顺序。
+- **架构升级**:  - **数据库迁移**: 引入了 Drizzle Migrations 机制。现在应用启动时会自动检查并执行 `drizzle/` 目录下的 SQL 迁移文件，替代了之前的硬编码 `initSchema`。这确保了未来版本更新时数据库结构的平滑过渡和数据安全。
+  - **打包配置**: 更新了 `electron-builder` 配置，将 `drizzle` 文件夹作为 `extraResources` 打包，确保生产环境中迁移文件可用。
+      - **迁移执行修复**: 修复了数据库迁移未执行的 Bug，通过在主进程入口文件 `src/main/index.ts` 中引入 `src/main/db/index.ts`，确保应用启动时正确运行数据库迁移。
+      - **Migration SQL 修复**: 修复了 Drizzle 生成的 `0002_lazy_callisto.sql` 迁移文件中的 SQL 错误。原自动生成的 SQL 尝试从旧表中 SELECT 不存在的 `current_mode` 字段，导致迁移失败。手动将其修改为 SQLite 支持的 `ALTER TABLE ... ADD COLUMN` 语句。
+  
+      - **Prompt Mode 显示修复**: 修复了 `PromptDetailPane.tsx` 中 Prompt Mode `Select` 组件显示为空的问题，通过为其添加 `value={promptMode}` 属性，使其成为受控组件并正确显示当前选定的 Mode。
+
+    - **Prompt Mode 切换修复**: 修复了 `PromptDetailPane.tsx` 中 Prompt Mode 切换无效的问题。
+      - 修正了 `promptMode` 变量的定义，使其正确反映 Draft 状态 (`promptDetail.currentMode`)。
+      - 在 `handleVersionTabChange` 函数中，添加了将当前版本 Mode 更新到 Draft 状态 (`currentMode`) 的逻辑。
+      - 更新了 `src/shared/ipc-types.ts` 和 `src/renderer/features/prompts/domain/models.ts` 中的类型定义，包含了 `currentMode` 字段。
+
+    - **IPC 参数错位修复**: 修复了 `createPromptVersion` 调用链中因漏传 `mode` 参数导致的所有后续参数错位（如 `isMajorVersion` boolean 被传给了 `note` string）的问题。
+      - 更新了 `src/renderer/features/prompts/domain/models.ts`、`PromptService.ts`、`src/preload/index.ts` 和 `src/shared/ipc-types.ts`，确保 `mode` 参数在所有层级都被正确传递。
+
+    - **Revert Mode 修复**: 修复了历史记录侧边栏 Revert 功能未重置 Prompt Mode 的问题。
+      - 在 `PromptDetailPane.tsx` 的 `handleRevertConfirm` 函数中，添加了将 `versionToRevert.mode` 同步到 `updatePrompt` 的 `currentMode` 字段的逻辑，确保 Mode 随版本回溯而更新。
+
+
+**Next Steps**:- 实现实际的 AI API 集成（目前是模拟/占位符参数）。
 - 添加数据导出/导入功能。
 - 优化 Markdown 编辑体验。
 - 完善 UI 样式和过渡效果。

@@ -52,7 +52,8 @@ export interface IpcPromptDetail {
   currentTemperature: number;
   currentTokenLimit?: number;
   currentTopK?: number;
-  currentTopP?: number;
+  currentTopP: number;
+  currentMode: 'api' | 'chat';
   isFavorite: boolean;
   isArchived: boolean;
   tags: string[]; // Aggregated tag names
@@ -68,11 +69,11 @@ export interface IpcPromptVersion {
   modelId?: string;
   temperature?: number;
   tokenLimit?: number;
-  topK?: number;
-  topP?: number;
+  topK: number;
+  topP: number;
+  mode: 'api' | 'chat';
+  note: string | null;
   isMajorVersion: boolean;
-  createdAt: number;
-  note?: string;
 }
 
 export interface IpcOutputSample {
@@ -114,6 +115,7 @@ export interface PromptApi {
       currentTokenLimit?: number;
       currentTopK?: number;
       currentTopP?: number;
+  currentMode?: 'api' | 'chat';
       isFavorite?: boolean;
       isArchived?: boolean;
     }
@@ -138,6 +140,7 @@ export interface PromptApi {
     tokenLimit: number | undefined,
     topK: number | undefined,
     topP: number | undefined,
+    mode: 'api' | 'chat',
     note: string | undefined,
     isMajorVersion: boolean,
     copySamplesFromVersionId?: string,

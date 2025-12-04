@@ -1,4 +1,5 @@
-import { app } from 'electron'
+import './db';
+import { app, BrowserWindow, shell } from 'electron';
 
 import { makeAppWithSingleInstanceLock } from 'lib/electron-app/factories/app/instance'
 import { makeAppSetup } from 'lib/electron-app/factories/app/setup'

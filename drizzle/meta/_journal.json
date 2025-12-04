@@ -15,6 +15,13 @@
       "when": 1764559481925,
       "tag": "0001_damp_pandemic",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1765333721665,
+      "tag": "0002_lazy_callisto",
+      "breakpoints": true
     }
   ]
 }

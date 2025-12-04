@@ -121,10 +121,11 @@ export function PromptDetailPane() {
   const [isDeletingVersion, setIsDeletingVersion] = useState(false);
   const [outputMode, setOutputMode] = useState<'preview' | 'edit'>('preview');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [promptMode, setPromptMode] = useState<'api' | 'chat'>('api');
   const [isRevertingVersion, setIsRevertingVersion] = useState(false);
   const [versionToRevert, setVersionToRevert] = useState<IpcPromptVersion | null>(null);
   const [isCopied, setIsCopied] = useState(false);
+
+
 
   // --- Initialization & Sync Logic ---
 
@@ -203,7 +204,8 @@ export function PromptDetailPane() {
       currentTemperature: targetVersion.temperature || 0.7,
       currentTokenLimit: targetVersion.tokenLimit || undefined,
       currentTopK: targetVersion.topK || undefined,
-      currentTopP: targetVersion.topP || undefined
+      currentTopP: targetVersion.topP || undefined,
+      currentMode: targetVersion.mode || 'api'
     });
   };
 
@@ -241,6 +243,8 @@ export function PromptDetailPane() {
 
   const currentPromptTokens = useMemo(() => estimateTokenCount(currentContent), [currentContent]);
   const modelContextWindow = selectedModel?.contextWindow || 0;
+
+  const promptMode = promptDetail?.currentMode || 'api';
 
   const { isTokenLimitExceedingContext, isPromptExceedingTokenLimit, isPromptExceedingContext } = useMemo(() => {
     let isTokenLimitExceedingContext = false;
@@ -280,11 +284,12 @@ export function PromptDetailPane() {
     const contentChanged = currentContent !== baselineVersion.content;
     const modelChanged = currentModelId !== (baselineVersion.modelId || "");
     const tempChanged = currentTemperature !== (baselineVersion.temperature || 0.7);
-    const tokenLimitChanged = currentTokenLimit !== baselineVersion.tokenLimit;
-    const topKChanged = currentTopK !== baselineVersion.topK;
-    const topPChanged = currentTopP !== baselineVersion.topP;
+    const tokenLimitChanged = currentTokenLimit !== (baselineVersion.tokenLimit || promptDetail.currentTokenLimit || 1000);
+    const topKChanged = currentTopK !== (baselineVersion.topK || promptDetail.currentTopK || 40);
+    const topPChanged = currentTopP !== (baselineVersion.topP || promptDetail.currentTopP || 0.9);
+    const modeChanged = promptMode !== (baselineVersion.mode || promptDetail.currentMode || 'api');
 
-    return contentChanged || modelChanged || tempChanged || tokenLimitChanged || topKChanged || topPChanged;
+    return contentChanged || modelChanged || tempChanged || tokenLimitChanged || topKChanged || topPChanged || modeChanged;
   }, [
     promptDetail,
     versions,
@@ -349,6 +354,12 @@ export function PromptDetailPane() {
     }
   };
 
+  const handlePromptModeChange = async (value: 'api' | 'chat') => {
+    if (!promptDetail) return;
+    // Update the draft mode directly
+    await updatePrompt(promptDetail.id, { currentMode: value });
+  };
+
   const handleSaveVersion = async () => {
     if (!promptDetail || !activeVersion) return;
     try {
@@ -361,6 +372,7 @@ export function PromptDetailPane() {
         tokenLimit: currentTokenLimit,
         topK: currentTopK,
         topP: currentTopP,
+        mode: promptMode,
         note: `Saved at ${new Date().toLocaleTimeString()}`,
         isMajorVersion: true,
         copySamplesFromVersionId: activeVersionId || undefined,
@@ -548,7 +560,8 @@ export function PromptDetailPane() {
         currentTemperature: versionToRevert.temperature || 0.7,
         currentTokenLimit: versionToRevert.tokenLimit || undefined,
         currentTopK: versionToRevert.topK || undefined,
-        currentTopP: versionToRevert.topP || undefined
+        currentTopP: versionToRevert.topP || undefined,
+        currentMode: versionToRevert.mode || 'api'
     });
 
     setIsRevertingVersion(false);
@@ -636,9 +649,8 @@ export function PromptDetailPane() {
               </div>
             )}
             <Select
-              value={promptMode}
-              onValueChange={(v) => setPromptMode(v as 'api' | 'chat')}
-            >
+                        value={promptMode}
+                        onValueChange={handlePromptModeChange}            >
               <SelectTrigger className="w-[110px]">
                 <SelectValue />
               </SelectTrigger>
