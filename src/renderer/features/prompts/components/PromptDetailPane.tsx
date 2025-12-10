@@ -54,9 +54,13 @@ import {
 } from "renderer/components/ui/command";
 import { Checkbox } from "renderer/components/ui/checkbox";
 
+import MarkdownPreview from '@uiw/react-markdown-preview';
+
 import { PromptHistorySidebar } from "./PromptHistorySidebar";
 import { IpcPromptVersion, IpcOutputSample } from "shared/ipc-types";
+
 import { usePromptStore } from "renderer/stores/usePromptStore";
+import { useTheme } from "renderer/components/theme-provider";
 
 const formatTokens = (num: number): string => {
   if (num >= 1_000_000) {
@@ -88,6 +92,29 @@ export function PromptDetailPane() {
     createOutputSample,
     fetchModels,
   } = usePromptStore();
+
+  const { theme } = useTheme();
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    const isDark = root.classList.contains("dark");
+    setResolvedTheme(isDark ? 'dark' : 'light');
+
+    // Observe class changes on html element (shadcn theme provider toggles 'dark' class)
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+          const isDarkNow = root.classList.contains("dark");
+          setResolvedTheme(isDarkNow ? 'dark' : 'light');
+        }
+      });
+    });
+
+    observer.observe(root, { attributes: true });
+
+    return () => observer.disconnect();
+  }, [theme]);
 
   // --- Derived State (Single Source of Truth) ---
   const versions = useMemo(() => promptDetail?.versions || [], [promptDetail]);
@@ -949,16 +976,22 @@ export function PromptDetailPane() {
                       </Button>
                     </div>
                   )}
-                  <Textarea
-                    value={activeSample.content}
-                    onChange={(e) => handleSampleChange('content', e.target.value)}
-                    readOnly={outputMode === 'preview'}
-                    className={cn(
-                      "flex-1 min-h-0 font-mono text-sm resize-none overflow-y-auto",
-                      outputMode === 'preview' && "bg-muted/30 focus-visible:ring-0"
-                    )}
-                    placeholder="Paste or write an example output here..."
-                  />
+                  {outputMode === 'preview' ? (
+                    <div className="flex-1 min-h-0 overflow-y-auto rounded-md border bg-background p-2">
+                       <MarkdownPreview 
+                         source={activeSample.content || "*No content*"} 
+                         style={{ backgroundColor: 'transparent', fontSize: '0.875rem' }} 
+                         wrapperElement={{ "data-color-mode": resolvedTheme }} 
+                       />
+                    </div>
+                  ) : (
+                    <Textarea
+                      value={activeSample.content}
+                      onChange={(e) => handleSampleChange('content', e.target.value)}
+                      className="flex-1 min-h-0 font-mono text-sm resize-none overflow-y-auto"
+                      placeholder="Paste or write an example output here..."
+                    />
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-1 items-center justify-center border border-dashed rounded-md bg-muted/10 text-muted-foreground text-sm">

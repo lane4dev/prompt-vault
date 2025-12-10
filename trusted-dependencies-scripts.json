@@ -4,6 +4,7 @@
   "electron-vite",
   "@biomejs/biome",
   "@tailwindcss/oxide",
+  "@uiw/react-markdown-preview",
   "electron-winstaller",
   "better-sqlite3"
 ]

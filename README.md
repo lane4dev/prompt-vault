@@ -105,7 +105,7 @@ pnpm build
 ## 🗺️ Roadmap
 
 - [ ] Filter by Tags
-- [ ] Markdown Preview for Output Samples
+- [X] Markdown Preview for Output Samples
 - [ ] Bulk Import/Export Prompts
 - [ ] Cloud Sync (WebDAV, Google Drive, etc.)
 - ~~Connect LLMs for Automatic Prompt Optimization~~

@@ -106,7 +106,7 @@ pnpm build
 ## 🗺️ 开发计划 (Roadmap)
 
 - [ ] 按标签过滤
-- [ ] Output Samples 支持 Markdown 预览
+- [X] Output Samples 支持 Markdown 预览
 - [ ] Prompt 批量导入导出
 - [ ] 同步到网盘 (WebDAV, Google Drive 等)
 - ~~接入大模型，自动优化提示词~~

@@ -354,6 +354,11 @@ src
       - 在 `PromptDetailPane.tsx` 的 `handleRevertConfirm` 函数中，添加了将 `versionToRevert.mode` 同步到 `updatePrompt` 的 `currentMode` 字段的逻辑，确保 Mode 随版本回溯而更新。
 
 
+    - **Output Markdown 预览**: 在 `PromptDetailPane.tsx` 中集成了 `@uiw/react-markdown-preview`。现在 Output Samples 在 Preview 模式下会渲染为 Markdown，提升了阅读体验。
+    - **Markdown 预览主题适配**: 实现了 `MarkdownPreview` 组件的主题自动切换。通过 `MutationObserver` 监听 `html` 标签的 class 变化（检测 dark 模式），动态设置 `data-color-mode`，确保预览样式与应用主题保持一致。
+    - **Import 恢复**: 修复了 `PromptDetailPane.tsx` 中 `PromptHistorySidebar` 组件和 `IpcPromptVersion`, `IpcOutputSample` 类型定义被意外删除的问题，重新添加了相应的 `import` 语句。
+    - **useTheme Import 恢复**: 修复了 `PromptDetailPane.tsx` 中 `useTheme` Hook 被意外删除的问题，重新添加了相应的 `import` 语句。
+
 **Next Steps**:- 实现实际的 AI API 集成（目前是模拟/占位符参数）。
 - 添加数据导出/导入功能。
 - 优化 Markdown 编辑体验。
