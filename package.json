@@ -2,7 +2,7 @@
   "displayName": "Prompt Vault",
   "name": "prompt-vault",
   "description": "An Electron-based application to manage and organize AI prompts efficiently.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "./node_modules/.dev/main/index.mjs",
   "resources": "src/resources",
   "author": {
