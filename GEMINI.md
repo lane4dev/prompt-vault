@@ -335,6 +335,7 @@ src
     - **ReferenceError 修复**: 修复了 `PromptDetailPane.tsx` 中 `selectedVersion` 未定义的 `ReferenceError`，将其替换为正确的 `activeVersion`。
     - **初始化顺序修复**: 修复了 `PromptDetailPane.tsx` 中 `promptMode` 引用 `activeVersion` 导致的 `ReferenceError`，将 `promptMode` 的定义移动到 `activeVersion` 之后。
     - **循环依赖修复**: 修复了 `PromptDetailPane.tsx` 中 `promptMode` 与 `isTokenLimitExceedingContext` 之间循环引用导致的 `ReferenceError`，调整了代码块的定义顺序。
+
 - **架构升级**:  - **数据库迁移**: 引入了 Drizzle Migrations 机制。现在应用启动时会自动检查并执行 `drizzle/` 目录下的 SQL 迁移文件，替代了之前的硬编码 `initSchema`。这确保了未来版本更新时数据库结构的平滑过渡和数据安全。
   - **打包配置**: 更新了 `electron-builder` 配置，将 `drizzle` 文件夹作为 `extraResources` 打包，确保生产环境中迁移文件可用。
       - **迁移执行修复**: 修复了数据库迁移未执行的 Bug，通过在主进程入口文件 `src/main/index.ts` 中引入 `src/main/db/index.ts`，确保应用启动时正确运行数据库迁移。
@@ -358,6 +359,13 @@ src
     - **Markdown 预览主题适配**: 实现了 `MarkdownPreview` 组件的主题自动切换。通过 `MutationObserver` 监听 `html` 标签的 class 变化（检测 dark 模式），动态设置 `data-color-mode`，确保预览样式与应用主题保持一致。
     - **Import 恢复**: 修复了 `PromptDetailPane.tsx` 中 `PromptHistorySidebar` 组件和 `IpcPromptVersion`, `IpcOutputSample` 类型定义被意外删除的问题，重新添加了相应的 `import` 语句。
     - **useTheme Import 恢复**: 修复了 `PromptDetailPane.tsx` 中 `useTheme` Hook 被意外删除的问题，重新添加了相应的 `import` 语句。
+
+## 2025-12-11 (Bug Fixes & Refinements)
+- **version 重命名 修复**
+    - **version 重命名**: 修复了 Prompt 版本的重命名功能。
+      - 构建了从前端到后端的完整链路：UI (`handleRenameVersion`) -> Store (`renamePromptVersion`) -> Service (`updateVersion`) -> Preload (`updatePromptVersion`) -> IPC Handler (`UPDATE_PROMPT_VERSION`) -> Database Update。
+      - Store 中实现了 Optimistic Update，确保重命名操作的即时反馈。
+
 
 **Next Steps**:- 实现实际的 AI API 集成（目前是模拟/占位符参数）。
 - 添加数据导出/导入功能。

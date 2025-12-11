@@ -28,7 +28,10 @@ const promptApi: PromptApi = {
 
   deletePromptVersion: (id) => ipcRenderer.invoke(IpcChannels.DELETE_PROMPT_VERSION, id),
 
-  createOutputSample: (versionId, name, content) => 
+  updatePromptVersion: (id, updates) => 
+    ipcRenderer.invoke(IpcChannels.UPDATE_PROMPT_VERSION, id, updates),
+
+  createOutputSample: (versionId, name, content) =>  
     ipcRenderer.invoke(IpcChannels.CREATE_OUTPUT_SAMPLE, versionId, name, content),
 
   updateOutputSample: (id, updates) => 

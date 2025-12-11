@@ -89,6 +89,7 @@ export function PromptDetailPane() {
     updatePrompt,
     createPromptVersion,
     deletePromptVersion,
+    renamePromptVersion,
     createOutputSample,
     fetchModels,
   } = usePromptStore();
@@ -145,6 +146,7 @@ export function PromptDetailPane() {
   const [isTagsPopoverOpen, setIsTagsPopoverOpen] = useState(false);
   const [isRenamingVersion, setIsRenamingVersion] = useState(false);
   const [tempVersionName, setTempVersionName] = useState("");
+  const [versionToRenameId, setVersionToRenameId] = useState<string | null>(null);
   const [isDeletingVersion, setIsDeletingVersion] = useState(false);
   const [outputMode, setOutputMode] = useState<'preview' | 'edit'>('preview');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -411,10 +413,10 @@ export function PromptDetailPane() {
     }
   };
 
-  const handleRenameVersion = () => {
-    // TODO: Implement IPC logic for renaming
+  const handleRenameVersion = async (versionId: string, newName: string) => {
+    if (!promptDetail) return;
+    await renamePromptVersion(versionId, promptDetail.id, newName);
     setIsRenamingVersion(false);
-    setTempVersionName("");
   };
 
   const handleDeleteVersion = async () => {
@@ -716,7 +718,13 @@ export function PromptDetailPane() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => { setTempVersionName(activeVersion.label || ""); setIsRenamingVersion(true); }}>
+                    <DropdownMenuItem onClick={() => { 
+                      if (activeVersion) {
+                        setTempVersionName(activeVersion.label || ""); 
+                        setVersionToRenameId(activeVersion.id);
+                      }
+                      setIsRenamingVersion(true); 
+                    }}>
                       Rename
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
@@ -1030,7 +1038,7 @@ export function PromptDetailPane() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsRenamingVersion(false)}>Cancel</Button>
-            <Button onClick={handleRenameVersion}>Rename</Button>
+            <Button onClick={() => versionToRenameId && handleRenameVersion(versionToRenameId, tempVersionName)}>Rename</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

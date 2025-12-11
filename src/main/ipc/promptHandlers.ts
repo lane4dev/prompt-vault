@@ -323,6 +323,27 @@ export function registerPromptIpcHandlers() {
     }
   });
 
+  ipcMain.handle(IpcChannels.UPDATE_PROMPT_VERSION, async (
+    _event: IpcMainInvokeEvent,
+    id: string,
+    updates: { label?: string; note?: string }
+  ): Promise<void> => {
+    try {
+      const versionUpdates: Partial<typeof schema.promptVersions.$inferInsert> = {};
+      if (updates.label !== undefined) versionUpdates.label = updates.label;
+      if (updates.note !== undefined) versionUpdates.note = updates.note;
+      
+      if (Object.keys(versionUpdates).length > 0) {
+        await db.update(schema.promptVersions)
+          .set(versionUpdates)
+          .where(eq(schema.promptVersions.id, id));
+      }
+    } catch (e) {
+      console.error("Failed to update prompt version:", e);
+      throw new Error((e as Error).message);
+    }
+  });
+
   ipcMain.handle(IpcChannels.CREATE_OUTPUT_SAMPLE, async (_event: IpcMainInvokeEvent, versionId: string, name: string, content: string): Promise<IpcOutputSample> => {
     const newSampleId = uuidv4();
     const now = new Date();

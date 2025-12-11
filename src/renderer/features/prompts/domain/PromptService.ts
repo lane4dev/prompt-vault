@@ -62,6 +62,10 @@ export const PromptService = {
     await window.promptApi.deletePromptVersion(id);
   },
 
+  updateVersion: async (id: string, updates: { label?: string; note?: string }): Promise<void> => {
+    await window.promptApi.updatePromptVersion(id, updates);
+  },
+
   createOutputSample: async (payload: CreateOutputSamplePayload): Promise<IpcOutputSample> => {
     return await window.promptApi.createOutputSample(
       payload.versionId,

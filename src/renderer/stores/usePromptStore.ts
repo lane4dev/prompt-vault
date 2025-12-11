@@ -26,6 +26,7 @@ interface PromptState {
 
   createPromptVersion: (payload: CreateVersionPayload) => Promise<IpcPromptVersion>;
   deletePromptVersion: (id: string, promptId: string) => Promise<void>;
+  renamePromptVersion: (id: string, promptId: string, newLabel: string) => Promise<void>;
 
   createOutputSample: (payload: CreateOutputSamplePayload) => Promise<IpcOutputSample>;
   updateOutputSample: (id: string, updates: { name?: string; content?: string }) => Promise<void>;
@@ -193,6 +194,30 @@ export const usePromptStore = create<PromptState>((set, get) => ({
     } catch (err) {
       console.error("Failed to delete prompt version:", err);
       set({ error: "Failed to delete prompt version" });
+    }
+  },
+
+  renamePromptVersion: async (id, promptId, newLabel) => {
+    try {
+      await PromptService.updateVersion(id, { label: newLabel });
+      
+      // Optimistic update
+      set((state) => {
+        if (!state.selectedPromptDetail || state.selectedPromptDetail.id !== promptId) return state;
+        return {
+          selectedPromptDetail: {
+            ...state.selectedPromptDetail,
+            versions: state.selectedPromptDetail.versions.map(v => 
+              v.id === id ? { ...v, label: newLabel } : v
+            )
+          }
+        };
+      });
+    } catch (err) {
+      console.error("Failed to rename prompt version:", err);
+      set({ error: "Failed to rename prompt version" });
+      // Revert on failure
+      get().fetchPromptDetail(promptId);
     }
   },
 
